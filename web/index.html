@@ -3,60 +3,176 @@
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
 	<link rel="stylesheet" href="assets/css/main.css" />
-	<script src="angular.min.js"></script><script >
-	app=angular.module('wpApp',[]);
+<script src="angular.min.js"></script><script >
+ app=angular.module('wpApp',[]);
 
-	app.controller('MainCtrl',
-		function mainCtrlController($scope ) {
-			$scope.usrFlag=app.usr=0
-			$scope.screen=app.screen='login'
-			$scope.starttime=new Date();
-			app.scopes={main:$scope}
-			//var test=(new Date()).toString(),tst=md5.createHash(test)
-			console.log(
-				'controller:MainCntrl:version=',$scope.starttime//$scope.version='MainCntrl , app='+app
-			);
-		}
-	)
-
-	app.controller('LoginCtrl',
-		function loginCtrlController($scope,$http ) {
-			const str='controller:LoginCntrl:';
-			app.scopes.login=$scope;
-			$scope.login={un:'',pw:''}//$scope.usrFlag=app.usr=0;
-			$scope.starttime=new Date();
-			//var test=(new Date()).toString(),tst=md5.createHash(test)
-			console.log(str,'version=',$scope.starttime)
-			$scope.tryLogin=function(){
-				let x=$scope.login.pw,st2=str+'tryLogin:';
-				$scope.login.pw=btoa(x);
-				$http.post('/doLogin',JSON.stringify($scope.login))
-					.then(r=>{
-						let p=$scope.$parent,u=r.data,s=app.scopes.main;
-						if(p!= s)
-							console.log(str,'resp:',p,'!=app.scopes.main',app.scopes);
-						console.log(st2,'r`',r)
-						if(u && u.profile)
-						{	s.usr=p.usr=u;
-							if(u.state && u.state.admin )
-								s.admin=p.admin=u.state.admin
-							s.screen=p.screen='account'
-						}
-					},e=>{
-						console.log(st2,'err`',e)
-						$scope.msg='error:'+e+';'+(new Date());})
+ app.controller('MainCtrl',
+	function mainCtrlController($scope,$http ) {
+		$scope.usrFlag=app.usr=0
+		$scope.screen=app.screen='login'
+		$scope.starttime=new Date();
+		app.scopes={main:$scope}
+		//var test=(new Date()).toString(),tst=md5.createHash(test)
+		const L= app.Lbl={
+			html:{id:1
+				,login:{id:0}
+				,signup:{id:0}
+				,menu:{id:0}
+				,main:{id:0}
+				,acc:{id:0}}}
+		console.log(
+			'controller:MainCntrl:version=',$scope.starttime//$scope.version='MainCntrl , app='+app
+		);
+		$scope.db={prefix:'wplatform.',lm:0
+			,tbls:[
+				['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm']],
+				['bank',    ['id','name'                                    ,'profile','state','creaTime','lm']],
+				['currency',['id','name'                                    ,'profile','state','creaTime','lm']],
+				['rate',    ['id','sell'  ,'buy'    ,'amount'               ,'profile','state','creaTime','lm']],
+				['Acc',     ['id','name'  ,'uid'    ,'bankid','currencyId'  ,'profile','state','creaTime','lm']],
+				['trans',   ['id','srcAcc','dstAcc' ,'amount'               ,'profile','state','creaTime','lm']],
+				['msg',     ['id','uid'   ,'toUsr'  ,'type'  ,'body'        ,'profile','state','creaTime','lm']],
+				['at',      ['id','Tid'   ,'tbl'    ,'type'  ,'body'        ,'profile','state','creaTime','lm']],
+				['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm']],
+				['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm']]]
+			,data:{} //  data.<tblName>.<id>=<obj> ; 'from from $http.get , and from/to localStorage[prefix+"data."+<tbleName>+'.'+<id>]
+			,save:function(tblNm,obj){
+				return $http.post(tblNm+'/'+obj.id,obj)
+					.then(r=>(console.log('db.ls.save:http.post:resp=',r,tblNm,obj),r))
+				}
+			,load:function(tblNm,id){
+				let db=$scope.db//,tbls=db.tbls//if(!tblNm){let lm=0;tbls.forEach(tbl=>)}else if(!id){}else Promise.resolve(0);
+				return $http.get('/lm/'+db.lm)
+					.then(r=>{for(let tblNm in r)
+						r[tblNm].forEach(e=>
+							((db.lm<e.lm?db.lm=e.lm:0)
+							,db.set(tblNm,e)
+							)
+						);return r;
+					})
 			}
+			,/**get from localStorage*/get:function(tblName,id){
+				let db=$scope.db,dt=db.tbls,ls=localStorage;
+				//dt.forEach(tbl=>db.load(tbl[0]))
+				if(!tblNm){let r=[];for(let e in ls){
+					let a=e.split('.'),v=ls[e],x
+						,tbl=dt.find(e=>e[0]==a[0])
+						,td=tbl&&db.data[tbl[0]]
+					if(tbl&&!td)
+						td=db.data[tbl[0]]={}
+					if(td)td[a[1]]=x=JSON.parse(v);
+					if(x){if(db.lm<x.lm)
+						db.lm=x.lm;
+						r.push(x)}
+				}return r;
+				}//else if(!id){}else{return}return Promise.resolve(0);
+			}
+			,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
+			,/**set localStorage from param-obj ,or from db.data*/set:function(tblName,obj){
+				let db=$scope.db,dt=db.tbls
+						,d=db.data
+						,ls=localStorage;
+				if(!tblNm){
+					for(let tn in d){let tbl=d[tn];//,lm=tbl.lm;
+						for (let id in tbl)
+							ls[db.prefix+tn+'.'+id]=JSON.stringify(tbl[id])
+					}
+				}else if(typeof (obj)=='number'){
+					ls[db.prefix+tblNm+'.'+obj]=JSON.stringify(d[tblNm][obj])
+				}else if(obj&&obj.id){
+					ls[db.prefix+tblNm+'.'+obj.id]=JSON.stringify(d[tblNm][obj.id]=obj)
+				}}
 		}
-	)
+	}
+ )
 
+ app.controller('LoginCtrl',
+	function loginCtrlController($scope,$http ) {
+		const str='controller:LoginCntrl:';
+		app.scopes.login=$scope;
+		$scope.login={un:'',pw:''}//$scope.usrFlag=app.usr=0;
+		$scope.starttime=new Date();//var test=(new Date()).toString(),tst=md5.createHash(test)
+		console.log(str,'version=',$scope.starttime)
+		$scope.tryLogin=function(){
+			let x=$scope.login.pw,st2=str+'tryLogin:';
+			$scope.login.pw=btoa(x);
+			$http.post('/doLogin',JSON.stringify($scope.login))
+				.then(r=>{
+					let p=$scope.$parent
+						,ssn=app.session=r.data
+						,u=ssn.usr
+						,mainScope=app.scopes.main;
+					if(p!= mainScope)
+						console.log(str,'resp:',p,'!=app.scopes.main',app.scopes);
+					console.log(st2,'r`',r)
+					if(u && u.profile)
+					{	mainScope.usr=p.usr=u;
+						if(u.state && u.state.admin )
+							mainScope.admin=p.admin=u.state.admin
+
+						mainScope.screen=p.screen='account'
+					}
+				},e=>{
+					console.log(st2,'err`',e)
+					$scope.msg='error:'+e+';'+(new Date());})
+		}
+	}
+ )
+
+ app.controller('AdminCtrl',
+	function adminCtrlController($scope,$http ) {
+		const str='controller:AdminCtrl:';
+		app.scopes.admin=$scope;
+		$scope.starttime=new Date();
+		console.log(str,'version=',$scope.starttime)
+		$scope.list=function(tbl){
+			let x=$scope.login.pw,st2=str+'list:';
+			$scope.login.pw=btoa(x);
+			$http.post('/list/'+tbl+'/'+'tbl.lm',JSON.stringify($scope.login))
+				.then(r=>{
+					let p=$scope.$parent
+						,ssn=app.session=r.data
+						,u=ssn.usr
+						,mainScope=app.scopes.main;
+					if(p!= mainScope)
+						console.log(str,'resp:',p,'!=app.scopes.main',app.scopes);
+					console.log(st2,'r`',r)
+					if(u && u.profile)
+					{	mainScope.usr=p.usr=u;
+						if(u.state && u.state.admin )
+							mainScope.admin=p.admin=u.state.admin
+						mainScope.screen=p.screen='account'
+					}
+				},e=>{
+					console.log(st2,'err`',e)
+					$scope.msg='error:'+e+';'+(new Date());})
+		}
+	}
+ )
+
+ //controller for: profile,accounts, messages
 </script>
 </head><body  ng-app="wpApp" ng-controller="MainCtrl">
 <div ng-controller="LoginCtrl" ng-if="!usr" class="is-preload loginForm" id="wrapperx" >
-	<table>
+	<span ng-if="!login.isSignup"><table><h1>Login</h1>
 		<tr><td>username</td><td><input ng-model="login.un"></td></tr>
 		<tr><td>password</td><td><input ng-model="login.pw" type="password"></td></tr>
 	</table><input type="submit" value="login" ng-click="tryLogin()">
-	{{msg}}
+	{{msg}}<hr><a ng-click="login.isSignup=1">Signup</a> </span>
+
+	<span ng-if="login.isSignup"><table><h1>Signup</h1>
+		<tr><td>username</td><td><input ng-disabled="signupState>2"  ng-model="login.un"></td></tr>
+		<tr><td>password</td><td><input ng-disabled="signupState>2" ng-model="login.pw" type="password"></td></tr>
+		<tr><td>confirm password</td><td><input ng-disabled="signupState>2" ng-model="login.pw" type="password"></td></tr>
+		<tr><td>email</td><td><input ng-disabled="signupState>2" ng-model="login.email" type="email"></td></tr>
+		<tr><td>tel</td><td><input ng-disabled="signupState>2" ng-model="login.tel" type="tel"></td></tr>
+		<tr><td>Full name</td><td><input ng-disabled="signupState>2" ng-model="login.fullname" /></td></tr>
+		<tr><td>CivilId / passport no</td><td><input ng-disabled="signupState>2" ng-model="login.cid" /></td></tr>
+		<tr><td>Country</td><td><input ng-disabled="signupState>2" ng-model="login.country" /></td></tr>
+		<tr><td>Address</td><td><input ng-disabled="signupState>2" ng-model="login.address" /></td></tr>
+		<tr><td>Confirmation code</td><td><input ng-disabled="signupState<2"ng-model="login.ConfirmationCode" /></td></tr>
+	</table><input type="submit" value="signup" ng-click="trySignup()">
+	{{msg}}<hr><a ng-click="login.isSignup=signupState=0">back to login</a> </span>
 </div>
 <!-- Wrapper -->
 <div id="wrapper" ng-if="usr">
@@ -69,7 +185,8 @@
 				<li><a href="#" ng-click="screen='profile'">Profile</a></li>
 				<li><a href="#" ng-click="screen='account'">Accounts</a></li>
 				<li><a href="#" ng-click="screen='messages'">Messages</a></li>
-				<li><a href="#" ng-click="screen='admin'" ng-if="admin">Admin</a></li>
+				<li><a href="#" ng-click="screen='admin'" >Admin</a></li>
+				<li>Screen={{screen }}</li>
 			</ul>
 		</nav>
 		<nav class="main">
@@ -211,20 +328,23 @@
 			</footer>
 		</article>
 		
-		<!-- Profile , Admin-section( config[profile-template-fields] ,  )-->
-		<article ng-if="screen=='admin' && admin" class="post">
+		<!-- Admin-screen( config[profile-template-fields] , users , currency , banks,  )-->
+		<article ng-if="screen=='admin'" class="post">
 			<header>
 				<div class="title">
-					<h2><a href="single.html">Admin screen</a></h2>
-					<p>Lorem ipsum dolor amet nullam consequat etiam feugiat</p>
+					<h2><a href="#">Admin screen</a></h2>
+					<ul><li ng-click="ascreen='users'" class="button large">Users</li>
+						<li ng-click="ascreen='banks'" class="button large">Banks</li>
+						<li ng-click="ascreen='currencies'" class="button large">Currencies</li>
+						<li ng-click="ascreen='templates'" class="button large">Templates</li></ul>
 				</div>
-				<div class="meta">
+				<!--div class="meta">
 					<time class="published" datetime="2015-10-22">October 22, 2015</time>
 					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
-				</div>
-			</header>
-			<a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a>
-			<p>Mauris neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla. Cras vehicula tellus eu ligula viverra, ac fringilla turpis suscipit. Quisque vestibulum rhoncus ligula.</p>
+				</div-->
+			</header><span ng-if="ascreen=='users'">
+			<!-- a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a -->
+			<p>Users</p>
 			<footer>
 				<ul class="actions">
 					<li><a href="single.html" class="button large">Continue Reading</a></li>
@@ -234,9 +354,9 @@
 					<li><a href="#" class="icon solid fa-heart">28</a></li>
 					<li><a href="#" class="icon solid fa-comment">128</a></li>
 				</ul>
-			</footer>
+			</footer></span>
 		</article>
-		
+
 		<!-- Pagination -- >
 			<ul class="actions pagination">
 				<li><a href="" class="disabled button large previous">Previous Page</a></li>
