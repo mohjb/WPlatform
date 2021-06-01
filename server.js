@@ -1,158 +1,204 @@
 const express = require("express");
 
 const app = express();
-const bodyParser = require('body-parser')
-//const multer = require('multer') // v1.0.5
-//const upload = multer() // for parsing multipart/form-data
+const bodyParser = require('body-parser')//const multer = require('multer') // v1.0.5//const upload = multer() // for parsing multipart/form-data
 
 app.use(bodyParser.json()) // for parsing application/json
 app.use(bodyParser.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
-app.tblNms=['usr','bank']
+
 const mariadb = require('mariadb');
-const pool = mariadb.createPool({host: 'localhost', user: 'm',password:'m', database:'test', connectionLimit: 5});
+const pool = mariadb.createPool({host: 'localhost', user: 'm',password:'m', database:'test'
+	, connectionLimit: 5, multipleStatements: true ,rowsAsArray:true});
 
-console.log('established mariadb pool:',pool);
+app.Tables=[
+	['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm'],'id'],
+	['bank',    ['id','name'                                    ,'profile','state','creaTime','lm']],
+	['currency',['id','name'                                    ,'profile','state','creaTime','lm']],
+	['rate',    ['id','sell'  ,'buy'    ,'amount'               ,'profile','state','creaTime','lm']],
+	['Acc',     ['id','name'  ,'uid'    ,'bankid','currencyId'  ,'profile','state','creaTime','lm'],'uid'],
+	['trans',   ['id','srcAcc','dstAcc' ,'amount'               ,'profile','state','creaTime','lm'],[{col:'srcAcc',fk:{col:'uid',tbl:'acc'}},{col:'dstAcc',fk:{col:'uid',tbl:'acc'}}]],
+	['msg',     ['id','uid'   ,'toUsr'  ,'type'  ,'body'        ,'profile','state','creaTime','lm'],['uid','toUsr']],
+	['at',      ['id','Tid'   ,'tbl'    ,'type'  ,'body'        ,'profile','state','creaTime','lm'],[{col:'tid',fk:{tbl:'tbl'}}]],
+	['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm'],'uid'],
+	['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm']]]
 
-app.use(express.static('web'))
+app.Tables.forEach(e=>app.Tables[e[0]]=e)//console.log('established mariadb pool:',pool);
 
-function showtables(){
-	let o={starttime:new Date()}
-	console.log('function showtables:1',o)
-	pool.getConnection()
-		.then(conn =>
-			conn.query("show tables")
-				.then(rows => { // rows: [ {val: 1}, meta: ... ]
-					o.time=new Date()
-					o.rows=rows
-					console.log('function showtables:2',o, o&&o.meta)
-				})
-				.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
-					//console.log('function showtables:3',o)
-					conn.release(); // release to pool
-				})
-				.catch(err => {
-					console.log('function showtables:4',o,err)
-					conn.release(); // release to pool
-				})
-		).catch(err => {
-		//not connected
-		console.log('function showtables:5',o,err)
-	});
-	console.log('function showtables:end',o)
-}
+app.sessions={timeoutPeriod:1000*60*10,f:function(sid){}}
 
-showtables()
+app.use(express.static('web'));
 
 app.post('/doLogin', function (req, res) {
 	console.log('express:app.post:doLogin:0',req,res);
-	let b=req.body  ,un=b.un,pw64=b.pw,pw=(new Buffer(pw64, 'base64')).toString('ascii');console.log('express:app.post:doLogin:1',b,un,pw64,pw);
+	let b=req.body ,sns=app.sessions
+		,un=b.un,pw64=b.pw
+		,pw=(new Buffer(pw64, 'base64')).toString('ascii');
+	console.log('express:app.post:doLogin:1',b,un,pw64,pw);
 	if(un && pw ) // ,un=1,pw=1//
-	pool.getConnection()
+		pool.getConnection()
 		.then(conn =>
 			conn.query("SELECT * from usr where name=? and pw=md5(?)",[un,pw])
-				.then(rows => { // rows: [ {val: 1}, meta: ... ]
-					if(rows){let o=rows[0];
-					if(o && o.state && !o.state.active)
-						o=0;
+			.then(rows => { // rows: [ {val: 1}, meta: ... ]
+				if(rows){let o=rows[0],ss={sid:(new Date()).getTime(),un:un,usr:{},expire:app.sessions.timeoutPeriod};
+					ss.expire+=ss.sid;
+					//if(o && o.state && !o.state.active) o=0;
 					if(o && o.state && ! o.state.admin )
 						delete o.state;
-					delete o.pw;
+					app.Tables.usr[1].forEach((c,i)=>{if(c!='pw')ss.usr[c]=o[i];})//delete o.pw;
+					app.sessions[ss.sid]=ss;
 					console.log('express:app.post:doLogin:2',b,un,o);
-					return res.json(o);//conn.query("INSERT INTO myTable value (?, ?)", [1, "mariadb"]);
+					return res.json(ss);//conn.query("INSERT INTO myTable value (?, ?)", [1, "mariadb"]);
 				}})
-				.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
-					conn.release(); // release to pool
-				})
-				.catch(err => {
-					console.log('express:app.post:doLogin:3',err);
-					conn.release(); // release to pool
-				})
+			.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+				conn.release(); // release to pool
+			})
+			.catch(err => {
+				console.log('express:app.post:doLogin:3',err);
+				conn.release(); // release to pool
+			})
 		).catch(err => {
-		console.log('express:app.post:doLogin:4:not connected');//not connected
-	});
+			console.log('express:app.post:doLogin:4:not connected');//not connected
+		});
 	console.log('express:app.post:doLogin:5');
 })
 
+app.post(':tbl', function (req, res) {
+	const str='express:post:';
+	let p=req.params
+		,lm=p.lm
+		,m=0
+		,h={}
+		,tbl=app.Tables.find(e=>e[0]==p.tbl)
+	if(! tbl)return res.json({error:'invalid operation:'+p.tbl});
 
-app.get('/test/', function (req, res) {
-	let o={b:req.body,d0:new Date()}//,un=b.un,pw64=b.pw,pw=(new Buffer(pw64, 'base64')).toString('ascii');
-	console.log('express:app.get:test:',o);
-	return res.json(o)
-})
-
-
-app.get('/list/:tbl/:mostRecent', function (req, res) {
-//	'id','parent','Name','html','profile','state','createdAt','updatedAt'
-	const str='express:configList:';
-	let plm=req.params.mostRecent,m=0,h={}
-	conn.query("SELECT * from config where updatedAt>?",[plm])
-	.then(rows =>
-		res.json(rows)
-	)
-	.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
-		conn.release();
-	})
-	.catch(err => {//console.log(str,'3',err);
-		conn.release();
-	})
-	/*todo:
-	* get db-lm,
-	* check if app has been initialized
-	*
-	*
-	pool.getConnection().then(conn =>
-		conn.query("SELECT max(updatedAt) as lm from config ")
-		.then(rows => rows[0].lm )
-		.then(r1 => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
-			let dblm=r1[0].lm,
-
-			return ct;
+	conn.query("replace `'+tbl[0]+'` set ``=? where `id`=?",[p.id])
+		.then(rows =>
+			res.json(rows)
+		)
+		.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+			conn.release();
 		})
 		.catch(err => {//console.log(str,'3',err);
 			conn.release();
 		})
-	).catch(err => {
-		console.log(str,'4:not connected');
-	})
-	.then(dblm=> {
-		if (!ct || lm < ct.lm) {
-			let q = [0], t = ct || {}, c = {0: t}, o = {d0: new Date(), tree: app.configTree}
-			while (q) {
-				let id = q.shift(), p = c[id];
-				f(id, p || t)
-			}
+})
+
+app.get('/lm/:lm', function (req, res) {
+		const str='express:app.get:lm:';
+		let now=new Date().getTime()
+			,sid=req.getTime('sid')
+			,ss=sid&&app.sessions[sid]
+		if(ss&& ss.expire<now){//TODO: log to DB session time-out
+			delete app.session[sid];
+			return res.json({error:'session-timeout'});
 		}
-		console.log(str, '5');
-		return o;
-	})*/
-})
+		if(!ss|| !ss.usr|| !ss.usr.state|| !ss.usr.state.active )
+			return res.json({error:'invalid credintials'});
+		let p=req.params
+			,lm=p.lm,a={}
+			,uid=ss.usr.id
+			,admin=ss.usr.state.admin;
+		ss.expire=now+app.sessions.timeoutPeriod;
+		pool.getConnection().then(conn =>{
+			function f(tbl,retFunc){
+				function trns(tbl){
+					let accs=a[app.Tables.acc[0]]
+					,s='('+accs.join(',')+')'//,tbl=app.Tables.trans
+					return conn.query("SELECT * from `"+tbl[0]+"` where `lm`>? and (srcAcc in "+s+" or dstAcc in "+s+") ",[lm])
+				}
+				let w=tbl[2],m=	(!w||admin)?conn.query("SELECT * from `'+tbl[0]+'` where lm>?",[lm])
+				:typeof w=='string'?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and `'+w+'`=?",[lm,uid])
+				:tbl[0]=='at'?0//w.length==1 && w[0].fk?0// tbl attachment
+				:!w[0].fk?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and (`'+w[0+]'`=? or `'+w[1]+'`=?)",[lm,uid,uid])//tbl:msg
+				:tbl[0]=='trans'?trns(tbl)
+				:0 //
+				;
+				if(!m)
+					return retFunc(m)
+				m.then(rows =>
+					retFunc(rows)//
+				)
+				.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+					conn.release();
+				})
+				.catch(err => {//console.log(str,'3',err);
+					conn.release();
+				})
+			}
+			app.Tables.forEach(//TODO: fix conn/incomplete-Promises race-problem
+				(tbl,i)=>
+				f(tbl,
+					r=>(
+						(a[tbl[0]]=r) ,
+						i >=app.Tables.length-1
+						? res.json(a)
+						: 0
+					)
+				)
+			)
+		})
+	}
+)
 
-app.get('/showtables/:p', function (req, res) {
-	let o={b:req.params,d0:new Date()}//,un=b.un,pw64=b.pw,pw=(new Buffer(pw64, 'base64')).toString('ascii');
-	//if(un && pw )
-	console.log('express.get:showtables:',o);
-	pool.getConnection()
-	.then(conn =>
-		conn.query("show tables")
-		.then(rows => { // rows: [ {val: 1}, meta: ... ]
-			o.d1=new Date()
-			o.rows=rows
-			return res.json(o)
-				//conn.query("INSERT INTO myTable value (?, ?)", [1, "mariadb"]);
+app.get('/:tbl/:id', function (req, res) {
+		const str='express:app.get:tbl:';
+		let now=new Date().getTime()
+			,sid=req.getTime('sid')
+			,ss=sid&&app.sessions[sid]
+		if(ss&& ss.expire<now){//TODO: log to DB session time-out
+			delete app.session[sid];
+			return res.json({error:'session-timeout'});
+		}
+		if(!ss|| !ss.usr|| !ss.usr.state|| !ss.usr.state.active )
+			return res.json({error:'invalid credintials'});
+		let p=req.params
+			,lm=p.lm,a={}
+			,uid=ss.usr.id
+			,admin=ss.usr.state.admin;
+		ss.expire=now+app.sessions.timeoutPeriod;
+		pool.getConnection().then(conn =>{
+			function f(tbl,retFunc){
+				function trns(tbl){
+					let accs=a[app.Tables.acc[0]]
+						,s='('+accs.join(',')+')'//,tbl=app.Tables.trans
+					return conn.query("SELECT * from `"+tbl[0]+"` where `lm`>? and (srcAcc in "+s+" or dstAcc in "+s+") ",[lm])
+				}
+				let w=tbl[2],m=	(!w||admin)?conn.query("SELECT * from `'+tbl[0]+'` where lm>?",[lm])
+					:typeof w=='string'?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and `'+w+'`=?",[lm,uid])
+						:tbl[0]=='at'?0//w.length==1 && w[0].fk?0// tbl attachment
+							:!w[0].fk?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and (`'+w[0+]'`=? or `'+w[1]+'`=?)",[lm,uid,uid])//tbl:msg
+								:tbl[0]=='trans'?trns(tbl)
+									:0 //
+				;
+				if(!m)
+					return retFunc(m)
+				m.then(rows =>
+					retFunc(rows)//
+				)
+					.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+						conn.release();
+					})
+					.catch(err => {//console.log(str,'3',err);
+						conn.release();
+					})
+			}
+			app.Tables.forEach(//TODO: fix conn/incomplete-Promises race-problem
+				(tbl,i)=>
+					f(tbl,
+						r=>(
+							(a[tbl[0]]=r) ,
+								i >=app.Tables.length-1
+									? res.json(a)
+									: 0
+						)
+					)
+			)
 		})
-		.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
-			conn.release(); // release to pool
-		})
-		.catch(err => {
-			conn.release(); // release to pool
-		})
-	).catch(err => {
-	//not connected
-	});
-})
+	}
+)
 
-app.listen(1234, () => {
-	console.log("Server is listening on port: 1234");
+const PORT=80;
+app.listen(PORT, () => {
+	console.log("Server is listening on port: ",PORT);
 });
-
 
