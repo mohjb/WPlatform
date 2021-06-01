@@ -23,6 +23,7 @@
 		console.log(
 			'controller:MainCntrl:version=',$scope.starttime//$scope.version='MainCntrl , app='+app
 		);
+
 		$scope.db={prefix:'wplatform.'
 			,tbls:[
 				['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm']],
@@ -36,6 +37,7 @@
 				['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm']],
 				['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm']]]
 			,data:{} //  data.<tblName>.<id>=<obj> ; 'from from $http.get , and from/to localStorage[prefix+"data."+<tbleName>+'.'+<id>]
+
 			,srvr:{lm:0,save:function(tblNm,obj){
 					return $http.post(tblNm+'/'+obj.id,obj)
 						.then(r=>(console.log('db.srvr.save:http.post:resp=',r,tblNm,obj),r))
@@ -69,6 +71,7 @@
 				}
 				,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
 				,/**set localStorage from param-obj ,or from db.data*/set:function(tblName,obj){
+
 				let db=$scope.db,dt=db.tbls
 						,d=db.data
 						,ls=localStorage;
@@ -82,6 +85,7 @@
 				}else if(obj&&obj.id){
 					ls[db.prefix+tblNm+'.'+obj.id]=JSON.stringify(d[tblNm][obj.id]=obj)
 				}}
+
 			}
 		}
 	}
