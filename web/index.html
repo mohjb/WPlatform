@@ -1,5 +1,5 @@
 <!DOCTYPE HTML><html><head>
-	<title>Future Imperfect by HTML5 UP</title>
+	<title>Money.Download</title>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
 	<link rel="stylesheet" href="assets/css/main.css" />
@@ -23,7 +23,6 @@
 		console.log(
 			'controller:MainCntrl:version=',$scope.starttime//$scope.version='MainCntrl , app='+app
 		);
-
 		$scope.db={prefix:'wplatform.'
 			,tbls:[
 				['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm']],
@@ -37,24 +36,28 @@
 				['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm']],
 				['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm']]]
 			,data:{} //  data.<tblName>.<id>=<obj> ; 'from from $http.get , and from/to localStorage[prefix+"data."+<tbleName>+'.'+<id>]
-
 			,srvr:{lm:0,save:function(tblNm,obj){
-					return $http.post(tblNm+'/'+obj.id,obj)
+					return $http.post(tblNm+'/'+obj.id,obj,{headers:{sid:app.session.sid}})
 						.then(r=>(console.log('db.srvr.save:http.post:resp=',r,tblNm,obj),r))
 				}
 				,load:function(tblNm,id){
 					let db=$scope.db//,tbls=db.tbls//if(!tblNm){let lm=0;tbls.forEach(tbl=>)}else if(!id){}else Promise.resolve(0);
-					return $http.get('/lm/'+db.lm)
-							.then(r=>{for(let tblNm in r)
-								r[tblNm].forEach(e=>
-									((db.lm<e.lm?db.lm=e.lm:0)
-										,db.ls.set(tblNm,e)
-									)
-								);return r;
-							})
-				}
+					return $http.get('/lm/'+db.srvr.lm,{headers:{sid:app.session.sid}})
+					.then(r=>{console.log('mainScope.db.srvr.load.kttpGet.then:',r)
+						for(let tblNm in r)
+							if(r[tblNm]&& r[tblNm].forEach)
+						r[tblNm].forEach(e=>
+							((db.srvr.lm<e.lm?db.srvr.lm=e.lm:0)
+								,db.ls.set(tblNm,e)
+							)
+						);
+							else
+								console.log('mainScope.db.srvr.load.kttpGet.then:else',tblNm)
+							return r;
+					})
+				 }
 			}
-			,ls:{/**get from localStorage*/get:function(tblName,id){
+			,ls:{/**get from localStorage*/read:function(tblNm,id){
 					let db=$scope.db,dt=db.tbls,ls=localStorage;//dt.forEach(tbl=>db.load(tbl[0]))
 					if(!tblNm){let r=[];for(let e in ls){
 						let a=e.split('.'),v=ls[e],x
@@ -62,19 +65,20 @@
 							,td=tbl&&db.data[tbl[0]]
 						if(tbl&&!td)
 							td=db.data[tbl[0]]={}
-						if(td)td[a[1]]=x=JSON.parse(v);
-						if(x){if(db.srvr.lm<x.lm)
-							db.srvr.lm=x.lm;
+						if(td)
+							td[a[1]]=x=JSON.parse(v);
+						if(x){
+							if(db.srvr.lm<x.lm)
+								db.srvr.lm=x.lm;
 							r.push(x)}
 					}return r;
 					}//else if(!id){}else{return}return Promise.resolve(0);
 				}
 				,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
-				,/**set localStorage from param-obj ,or from db.data*/set:function(tblName,obj){
-
+				,/**set localStorage from param-obj ,or from db.data*/set:function(tblNm,obj){
 				let db=$scope.db,dt=db.tbls
-						,d=db.data
-						,ls=localStorage;
+					,d=db.data
+					,ls=localStorage;
 				if(!tblNm){
 					for(let tn in d){let tbl=d[tn];//,lm=tbl.lm;
 						for (let id in tbl)
@@ -84,11 +88,27 @@
 					ls[db.prefix+tblNm+'.'+obj]=JSON.stringify(d[tblNm][obj])
 				}else if(obj&&obj.id){
 					ls[db.prefix+tblNm+'.'+obj.id]=JSON.stringify(d[tblNm][obj.id]=obj)
-				}}
-
-			}
-		}
-	}
+				}}//set
+			}//ls
+			,get:(tblNm,id)=>({/**
+				returns an obj
+				{srvr:<promise:returns 0 if not found on server,
+					otherwise returns obj loaded from server>
+				,ls:<promise: return 0 if not found,
+					otherwise returns obj loaded from localStorage>
+				}*/ls:Promise.resolve($scope.db.ls.read(tblNm,id))
+				,srvr:$scope.db.srvr.load(tblNm,id)
+				})
+			,set:(tblNm,obj)=>({/**function dbSet
+				returns an obj
+				{srvr:<promise:returns 0 if not found on server,
+					otherwise returns obj loaded from server>
+				,ls:<promise: return 0 if not found,
+					otherwise returns obj loaded from localStorage>
+				}*/ls:$scope.db.ls.set(tblNm,obj)
+				,srvr:$scope.db.srvr.save(tblNm,obj)})
+		} // db
+	}//function mainCtrlController
  )
 
  app.controller('LoginCtrl',
@@ -114,7 +134,8 @@
 					{	mainScope.usr=p.usr=u;
 						if(u.state && u.state.admin )
 							mainScope.admin=p.admin=u.state.admin
-
+						mainScope.db.ls.read()
+						mainScope.db.srvr.load()
 						mainScope.screen=p.screen='account'
 					}
 				},e=>{
@@ -256,19 +277,20 @@
 	<div id="main">
 		
 		<!-- Accounts , balance, transactions, Admin-section( currencies , banks(banks-list(add,delete), bank-select(edit,accounts,currencies, transByDates ),  )-->
-		<article ng-if="screen=='account'" class="post">
+		<span ng-if="screen=='account'">
+		<article ng-repeat="acc in db.data.acc" class="post">
 			<header>
 				<div class="title">
 					<h2><a href="single.html">Accounts Screen</a></h2>
 					<p>Lorem ipsum dolor amet nullam consequat etiam feugiat</p>
 				</div>
 				<div class="meta">
-					<time class="published" datetime="2015-11-01">November 1, 2015</time>
+					<time class="published" datetime="2015-11-01">v2021-06-01 22:36</time>
 					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
 				</div>
 			</header>
 			<a href="single.html" class="image featured"><img src="images/pic01.jpg" alt="" /></a>
-			<p>Mauris neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.</p>
+			<p>{{acc | json}}<!-- v2021-06-01- 20:00 18-50 neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.--></p>
 			<footer>
 				<ul class="actions">
 					<li><a href="single.html" class="button large">Continue Reading</a></li>
@@ -279,7 +301,7 @@
 					<li><a href="#" class="icon solid fa-comment">128</a></li>
 				</ul>
 			</footer>
-		</article>
+		</article></span>
 		
 		<!-- Messages, Admin-section -->
 		<article ng-if="screen=='messages'" class="post">
