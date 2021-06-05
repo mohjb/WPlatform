@@ -69,7 +69,8 @@ app.post(':tbl', function (req, res) {
 		,m=0
 		,h={}
 		,tbl=app.Tables.find(e=>e[0]==p.tbl)
-	if(! tbl)return res.json({error:'invalid operation:'+p.tbl});
+	if(! tbl)
+		return res.json({error:'invalid operation:'+p.tbl});
 
 	conn.query("replace `'+tbl[0]+'` set ``=? where `id`=?",[p.id])
 		.then(rows =>
@@ -83,11 +84,10 @@ app.post(':tbl', function (req, res) {
 		})
 })
 
-
 app.get('/lm/:lm', function (req, res) {
 		const str='express:app.get:lm:';
 		let now=new Date().getTime()
-			,sid=req.getTime('sid')
+			,sid=req.get('sid')
 			,ss=sid&&app.sessions[sid]
 		if(ss&& ss.expire<now){//TODO: log to DB session time-out
 			delete app.session[sid];
@@ -107,10 +107,10 @@ app.get('/lm/:lm', function (req, res) {
 					,s='('+accs.join(',')+')'//,tbl=app.Tables.trans
 					return conn.query("SELECT * from `"+tbl[0]+"` where `lm`>? and (srcAcc in "+s+" or dstAcc in "+s+") ",[lm])
 				}
-				let w=tbl[2],m=	(!w||admin)?conn.query("SELECT * from `'+tbl[0]+'` where lm>?",[lm])
-				:typeof w=='string'?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and `'+w+'`=?",[lm,uid])
-				:tbl[0]=='at'?0//w.length==1 && w[0].fk?0// tbl attachment
-				:!w[0].fk?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and (`'+w[0+]'`=? or `'+w[1]+'`=?)",[lm,uid,uid])//tbl:msg
+				let w=tbl[2],m=	(!w||admin)?conn.query("SELECT * from `"+tbl[0]+"` where lm>?",[lm])
+				:typeof w=="string"?conn.query("SELECT * from `"+tbl[0]+"` where lm>? and `"+w+"`=?",[lm,uid])
+				:tbl[0]=="at"?0//w.length==1 && w[0].fk?0// tbl attachment
+				:!w[0].fk?conn.query("SELECT * from `"+tbl[0]+"` where lm>? and (`"+w[0]+"`=? or `"+w[1]+"`=?)",[lm,uid,uid])//tbl:msg
 				:tbl[0]=='trans'?trns(tbl)
 				:0 //
 				;
@@ -118,25 +118,28 @@ app.get('/lm/:lm', function (req, res) {
 					return retFunc(m)
 				m.then(rows =>
 					retFunc(rows)//
-				)
-				.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
-					conn.release();
-				})
+				)//.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }//conn.release();})
 				.catch(err => {//console.log(str,'3',err);
 					conn.release();
 				})
+			}function remPw(tbl,r){
+				if(app.Tables.usr[0]!=tbl[0])return r;
+				r.forEach(i=>(i.splice(2,1),i))
+				return r;
 			}
 			app.Tables.forEach(//TODO: fix conn/incomplete-Promises race-problem
 				(tbl,i)=>
 				f(tbl,
 					r=>(
-						(a[tbl[0]]=r) ,
+						(a[tbl[0]]=remPw(tbl,r)) ,
 						i >=app.Tables.length-1
 						? res.json(a)
 						: 0
 					)
 				)
 			)
+		}).then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+			conn.release();
 		})
 	}
 )
@@ -166,10 +169,10 @@ app.get('/:tbl/:id', function (req, res) {
 				}
 				let w=tbl[2],m=	(!w||admin)?conn.query("SELECT * from `'+tbl[0]+'` where lm>?",[lm])
 					:typeof w=='string'?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and `'+w+'`=?",[lm,uid])
-						:tbl[0]=='at'?0//w.length==1 && w[0].fk?0// tbl attachment
-							:!w[0].fk?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and (`'+w[0+]'`=? or `'+w[1]+'`=?)",[lm,uid,uid])//tbl:msg
-								:tbl[0]=='trans'?trns(tbl)
-									:0 //
+					:tbl[0]=='at'?0//w.length==1 && w[0].fk?0// tbl attachment
+					:!w[0].fk?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and (`'+w[0+]'`=? or `'+w[1]+'`=?)",[lm,uid,uid])//tbl:msg
+					:tbl[0]=='trans'?trns(tbl)
+					:0 //
 				;
 				if(!m)
 					return retFunc(m)
