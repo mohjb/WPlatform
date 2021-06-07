@@ -43,25 +43,22 @@
 				,load:function(tblNm,id){
 					let db=$scope.db//,tbls=db.tbls//if(!tblNm){let lm=0;tbls.forEach(tbl=>)}else if(!id){}else Promise.resolve(0);
 					return $http.get('/lm/'+db.srvr.lm,{headers:{sid:app.session.sid}})
-					.then(r=>{console.log('mainScope.db.srvr.load.kttpGet.then:',r)
-						for(let tblNm in r)
-							if(r[tblNm]&& r[tblNm].forEach)
-						r[tblNm].forEach(e=>
-							((db.srvr.lm<e.lm?db.srvr.lm=e.lm:0)
-								,db.ls.set(tblNm,e)
-							)
-						);
-							else
-								console.log('mainScope.db.srvr.load.kttpGet.then:else',tblNm)
-							return r;
+					.then(prm=>{let r=prm.data;console.log('mainScope.db.srvr.load.httpGet.then:',r)
+						for(let tblNm in r) //if(r[tblNm]&& r[tblNm].forEach)
+							r[tblNm].forEach(e=>
+								((db.srvr.lm<e.lm?db.srvr.lm=e.lm:0)
+									,db.ls.set(tblNm,e)
+								)
+							) //else console.log('mainScope.db.srvr.load.kttpGet.then:else',tblNm)
+						return r;
 					})
 				 }
-			}
+			 }
 			,ls:{/**get from localStorage*/read:function(tblNm,id){
 					let db=$scope.db,dt=db.tbls,ls=localStorage;//dt.forEach(tbl=>db.load(tbl[0]))
 					if(!tblNm){let r=[];for(let e in ls){
 						let a=e.split('.'),v=ls[e],x
-							,tbl=dt.find(e=>e[0]==a[0])
+							,tbl=dt.find(e=>e[0]==a[1])
 							,td=tbl&&db.data[tbl[0]]
 						if(tbl&&!td)
 							td=db.data[tbl[0]]={}
@@ -77,18 +74,19 @@
 				,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
 				,/**set localStorage from param-obj ,or from db.data*/set:function(tblNm,obj){
 				let db=$scope.db,dt=db.tbls
-					,d=db.data
-					,ls=localStorage;
+				,d=db.data,ls=localStorage
+				,id=obj&&(obj[0]||obj.id);if(!d[tblNm])
+					d[tblNm]={}
 				if(!tblNm){
 					for(let tn in d){let tbl=d[tn];//,lm=tbl.lm;
 						for (let id in tbl)
 							ls[db.prefix+tn+'.'+id]=JSON.stringify(tbl[id])
 					}
-				}else if(typeof (obj)=='number'){
+				}else if(typeof (obj)=='number' && d[tblNm][obj]!=undefined )
 					ls[db.prefix+tblNm+'.'+obj]=JSON.stringify(d[tblNm][obj])
-				}else if(obj&&obj.id){
-					ls[db.prefix+tblNm+'.'+obj.id]=JSON.stringify(d[tblNm][obj.id]=obj)
-				}}//set
+				else if(id)
+					ls[db.prefix+tblNm+'.'+id]=JSON.stringify(d[tblNm][id]=obj)
+				}//set
 			}//ls
 			,get:(tblNm,id)=>({/**
 				returns an obj
@@ -278,14 +276,14 @@
 		
 		<!-- Accounts , balance, transactions, Admin-section( currencies , banks(banks-list(add,delete), bank-select(edit,accounts,currencies, transByDates ),  )-->
 		<span ng-if="screen=='account'">
-		<article ng-repeat="acc in db.data.acc" class="post">
+		<article ng-repeat="acc in db.data.Acc" class="post" ng-init="accUsr=db.data.usr[acc[2]]">
 			<header>
 				<div class="title">
-					<h2><a href="single.html">Accounts Screen</a></h2>
-					<p>Lorem ipsum dolor amet nullam consequat etiam feugiat</p>
+					<h2><a href="single.html">{{acc[1]}}</a></h2>
+					<p>{{accUsr[1]}}</p>
 				</div>
 				<div class="meta">
-					<time class="published" datetime="2015-11-01">v2021-06-01 22:36</time>
+					<time class="published" datetime="{{acc[8]}}">{{acc[7]}}</time>
 					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
 				</div>
 			</header>
