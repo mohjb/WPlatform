@@ -122,7 +122,10 @@ app.get('/lm/:lm', function (req, res) {
 				.catch(err => {//console.log(str,'3',err);
 					conn.release();
 				})
-			}function remPw(tbl,r){
+			}function filtrCols(tbl,r){
+				function doDt(ci){}
+				const dates=['dt','expire', 'creaTime','lm' ]
+				dates
 				if(app.Tables.usr[0]!=tbl[0])return r;
 				r.forEach(i=>(i.splice(2,1),i))
 				return r;
@@ -131,7 +134,7 @@ app.get('/lm/:lm', function (req, res) {
 				(tbl,i)=>
 				f(tbl,
 					r=>(
-						(a[tbl[0]]=remPw(tbl,r)) ,
+						(a[tbl[0]]=filtrCols(tbl,r)) ,
 						i >=app.Tables.length-1
 						? res.json(a)
 						: 0
