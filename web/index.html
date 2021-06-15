@@ -23,6 +23,8 @@
 		console.log(
 			'controller:MainCntrl:version=',$scope.starttime//$scope.version='MainCntrl , app='+app
 		);
+		$scope.toDate=s=>new Date(s);
+		$scope.toDateStr=s=>(new Date(s)).toISOString().substr(0,10)
 		$scope.db={prefix:'wplatform.'
 			,tbls:[
 				['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm']],
@@ -36,43 +38,45 @@
 				['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm']],
 				['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm']]]
 			,data:{} //  data.<tblName>.<id>=<obj> ; 'from from $http.get , and from/to localStorage[prefix+"data."+<tbleName>+'.'+<id>]
-			,srvr:{lm:0,save:function(tblNm,obj){
+			,srvr:{lm:0,save:function srvrSave(tblNm,obj){
 					return $http.post(tblNm+'/'+obj.id,obj,{headers:{sid:app.session.sid}})
 						.then(r=>(console.log('db.srvr.save:http.post:resp=',r,tblNm,obj),r))
 				}
-				,load:function(tblNm,id){
+				,load:function srvrLoad(tblNm,id){
 					let db=$scope.db//,tbls=db.tbls//if(!tblNm){let lm=0;tbls.forEach(tbl=>)}else if(!id){}else Promise.resolve(0);
 					return $http.get('/lm/'+db.srvr.lm,{headers:{sid:app.session.sid}})
-					.then(prm=>{let r=prm.data;console.log('mainScope.db.srvr.load.httpGet.then:',r)
-						for(let tblNm in r) //if(r[tblNm]&& r[tblNm].forEach)
-							r[tblNm].forEach(e=>
-								((db.srvr.lm<e.lm?db.srvr.lm=e.lm:0)
-									,db.ls.set(tblNm,e)
+					.then(prm=> {
+						let r = prm.data;
+						console.log('mainScope.db.srvr.load.httpGet.then:', r)
+						for (let tblNm in r){let td=r[tblNm],lmi=td[0]&&td[0].length-1; //if(r[tblNm]&& r[tblNm].forEach)
+							td&&td.forEach&&td.forEach(e =>
+								((db.srvr.lm < e[lmi] ? db.srvr.lm = e[lmi] : 0)
+									, db.ls.set(tblNm, e)
 								)
 							) //else console.log('mainScope.db.srvr.load.kttpGet.then:else',tblNm)
-						return r;
+					}return r;
 					})
 				 }
 			 }
-			,ls:{/**get from localStorage*/read:function(tblNm,id){
+			,ls:{/**get from localStorage*/read:function lsRead(tblNm,id){
 					let db=$scope.db,dt=db.tbls,ls=localStorage;//dt.forEach(tbl=>db.load(tbl[0]))
 					if(!tblNm){let r=[];for(let e in ls){
 						let a=e.split('.'),v=ls[e],x
 							,tbl=dt.find(e=>e[0]==a[1])
-							,td=tbl&&db.data[tbl[0]]
+							,td=tbl&&db.data[tbl[0]],lmi=tbl&&tbl[1].length-1
 						if(tbl&&!td)
 							td=db.data[tbl[0]]={}
 						if(td)
-							td[a[1]]=x=JSON.parse(v);
+							td[a[2]]=x=JSON.parse(v);
 						if(x){
-							if(db.srvr.lm<x.lm)
-								db.srvr.lm=x.lm;
+							if( db.srvr.lm<x[lmi])
+								db.srvr.lm=x[lmi];
 							r.push(x)}
 					}return r;
 					}//else if(!id){}else{return}return Promise.resolve(0);
 				}
 				,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
-				,/**set localStorage from param-obj ,or from db.data*/set:function(tblNm,obj){
+				,/**set localStorage from param-obj ,or from db.data*/set:function lsSet(tblNm,obj){
 				let db=$scope.db,dt=db.tbls
 				,d=db.data,ls=localStorage
 				,id=obj&&(obj[0]||obj.id);if(!d[tblNm])
@@ -87,6 +91,23 @@
 				else if(id)
 					ls[db.prefix+tblNm+'.'+id]=JSON.stringify(d[tblNm][id]=obj)
 				}//set
+				,a2o:(tblNm,a)=>{
+					let db= $scope.db
+					,b=typeof tblNm=='string'
+					,tbl=b?db.tbls.find(i=>i[0]==tblNm):tblNm;
+					if(!tbl)
+						return a;
+					if(!b && tbl)tblNm=tbl[0];
+					if((typeof a == 'number')||typeof a == 'string')
+						a=db.data[tblNm][a];
+					if(!a){
+						let data=db.data[tblNm]
+						a=Object.keys(data).map(id=>db.ls.a2o(tbl,id))
+						return a;}
+					let r={};
+					tbl[1].forEach((c,i)=>r[c]=a[i])
+					return r;
+				}
 			}//ls
 			,get:(tblNm,id)=>({/**
 				returns an obj
@@ -95,7 +116,9 @@
 				,ls:<promise: return 0 if not found,
 					otherwise returns obj loaded from localStorage>
 				}*/ls:Promise.resolve($scope.db.ls.read(tblNm,id))
+				// TODO: index.html:MainCtrl.$scope.db.get: implement calling a2o for 2 cases with <return promise>.ls
 				,srvr:$scope.db.srvr.load(tblNm,id)
+				// TODO: index.html:MainCtrl.$scope.db.get: implement calling a2o for 2 cases with srvr
 				})
 			,set:(tblNm,obj)=>({/**function dbSet
 				returns an obj
@@ -275,26 +298,26 @@
 	<div id="main">
 		
 		<!-- Accounts , balance, transactions, Admin-section( currencies , banks(banks-list(add,delete), bank-select(edit,accounts,currencies, transByDates ),  )-->
-		<span ng-if="screen=='account'">
-		<article ng-repeat="acc in db.data.Acc" class="post" ng-init="accUsr=db.data.usr[acc[2]]">
+		<span ng-if="screen=='account'" ng-init="accounts=db.ls.a2o('Acc')">
+		<article ng-repeat="acc in accounts" class="post" ng-init="accUsr=db.ls.a2o('usr',acc.uid)">
 			<header>
 				<div class="title">
-					<h2><a href="single.html">{{acc[1]}}</a></h2>
-					<p>{{accUsr[1]}}</p>
+					<h2><a href="single.html">{{acc.name}}</a></h2>
+					<p>{{db.ls.a2o('bank',acc.bankid).name}}</p>
 				</div>
 				<div class="meta">
-					<time class="published" datetime="{{acc[8]}}">{{acc[7]}}</time>
-					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
+					<time class="published" datetime="{{toDateStr(acc.lm)}}">{{toDateStr(acc.creaTime)}}</time>
+					<a href="#" class="author"><span class="name">{{(accUsr.profile&&accUsr.profile.displayName)||accUsr.name}}</span><img src="images/avatar.jpg" alt="" /></a>
 				</div>
 			</header>
 			<a href="single.html" class="image featured"><img src="images/pic01.jpg" alt="" /></a>
 			<p>{{acc | json}}<!-- v2021-06-01- 20:00 18-50 neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.--></p>
 			<footer>
 				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
+					<li><a href="#" class="button large" ng-click="">Transactions</a></li>
 				</ul>
 				<ul class="stats">
-					<li><a href="#">General</a></li>
+					<li><a href="#">{{db.ls.a2o('currency',acc.currencyId).name}}</a></li>
 					<li><a href="#" class="icon solid fa-heart">28</a></li>
 					<li><a href="#" class="icon solid fa-comment">128</a></li>
 				</ul>
