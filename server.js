@@ -8,7 +8,7 @@ app.use(bodyParser.urlencoded({ extended: true })) // for parsing application/x-
 
 const mariadb = require('mariadb');
 const pool = mariadb.createPool({host: 'localhost', user: 'm',password:'m', database:'test'
-	, connectionLimit: 5, multipleStatements: true ,rowsAsArray:true});
+	, connectionLimit: 5, multipleStatements: true ,rowsAsArray:true });
 
 app.Tables=[
 	['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm'],'id'],
@@ -90,15 +90,18 @@ app.get('/lm/:lm', function (req, res) {
 			,sid=req.get('sid')
 			,ss=sid&&app.sessions[sid]
 		if(ss&& ss.expire<now){//TODO: log to DB session time-out
-			delete app.session[sid];
+			if(app&&app.session&& app.session[sid])
+				delete app.session[sid];
 			return res.json({error:'session-timeout'});
 		}
 		if(!ss|| !ss.usr|| !ss.usr.state|| !ss.usr.state.active )
 			return res.json({error:'invalid credintials'});
-		let p=req.params
-			,lm=p.lm,a={}
-			,uid=ss.usr.id
+		let lm=req.params.lm
+			,uid=ss.usr.id,a={}
 			,admin=ss.usr.state.admin;
+		try{lm=(new Date(+lm)).toISOString()}catch (x){
+			console.warn(x);
+		}
 		ss.expire=now+app.sessions.timeoutPeriod;
 		pool.getConnection().then(conn =>{
 			function f(tbl,retFunc){
@@ -122,14 +125,20 @@ app.get('/lm/:lm', function (req, res) {
 				.catch(err => {//console.log(str,'3',err);
 					conn.release();
 				})
-			}function filtrCols(tbl,r){
-				function doDt(ci){}
-				const dates=['dt','expire', 'creaTime','lm' ]
-				dates
-				if(app.Tables.usr[0]!=tbl[0])return r;
-				r.forEach(i=>(i.splice(2,1),i))
-				return r;
-			}
+			}function filtrCols(tbl,rows){
+				const Dates=['dt','expire', 'creaTime','lm' ]
+				let cols=[]
+				Dates.forEach(c=>{
+					let i=tbl[1].indexOf(c)
+					if(i>=0)cols.push(i)})
+				rows.forEach(r=>cols.forEach(ci=>{
+					let v=r[ci];
+					r[ci]=v?(v.getTime?v:new Date(v)).getTime():v;}
+				))
+				if(app.Tables.usr[0]!=tbl[0])return rows;
+				rows.forEach(i=>(i.splice(2,1),i))
+				return rows;
+			} // function filtrCols
 			app.Tables.forEach(//TODO: fix conn/incomplete-Promises race-problem
 				(tbl,i)=>
 				f(tbl,
@@ -206,6 +215,5 @@ app.get('/:tbl/:id', function (req, res) {
 
 const PORT=80;
 app.listen(PORT, () => {
-	console.log("Server is listening on port: ",PORT);
+	console.log(`Server is listening on port: ${PORT} ,v202106141711`);
 });
-
