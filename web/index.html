@@ -27,7 +27,7 @@
 		$scope.toDateStr=s=>(new Date(s)).toISOString().substr(0,10)
 		$scope.db={prefix:'wplatform.'
 			,tbls:[
-				['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm']],
+				['usr',     ['id','name'                                    ,'profile','state','creaTime','lm']],
 				['bank',    ['id','name'                                    ,'profile','state','creaTime','lm']],
 				['currency',['id','name'                                    ,'profile','state','creaTime','lm']],
 				['rate',    ['id','sell'  ,'buy'    ,'amount'               ,'profile','state','creaTime','lm']],
@@ -105,8 +105,12 @@
 						a=Object.keys(data).map(id=>db.ls.a2o(tbl,id))
 						return a;}
 					let r={};
-					tbl[1].forEach((c,i)=>r[c]=a[i])
+					tbl[1].forEach((c,i)=>r[c]=a[i]) // if(tbl[0]=='usr')else
 					return r;
+				}
+				,accTrans:accId=>{
+					let a=[],db=$scope.db,acc=db.data.Acc[accId],ix=db.tbls.trans.f;
+					a=db.data.trans.filter(i=>)
 				}
 			}//ls
 			,get:(tblNm,id)=>({/**
@@ -129,6 +133,7 @@
 				}*/ls:$scope.db.ls.set(tblNm,obj)
 				,srvr:$scope.db.srvr.save(tblNm,obj)})
 		} // db
+		$scope.db.tbls.forEach(tbl=>$scope.db.tbls[tbl[0]]=tbl)
 	}//function mainCtrlController
  )
 
@@ -323,7 +328,7 @@
 				</ul>
 			</footer>
 		</article></span>
-		
+
 		<!-- Messages, Admin-section -->
 		<article ng-if="screen=='messages'" class="post">
 			<header>
@@ -355,23 +360,23 @@
 			<header>
 				<div class="title">
 					<h2><a href="single.html">Profile screen</a></h2>
-					<p>Lorem ipsum dolor amet nullam consequat etiam feugiat</p>
+					<p>{{usr.profile.displayName}}</p>
 				</div>
 				<div class="meta">
-					<time class="published" datetime="2015-10-22">October 22, 2015</time>
-					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
+					<time class="published" datetime="{{toDate(usr.lm)}}">{{toDateStr(usr.creaTime)}}</time>
+					<a href="#" class="author"><span class="name">{{usr.name}}</span><img src="images/avatar.jpg" alt="" /></a>
 				</div>
 			</header>
 			<a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a>
-			<p>Mauris neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla. Cras vehicula tellus eu ligula viverra, ac fringilla turpis suscipit. Quisque vestibulum rhoncus ligula.</p>
+			<p>{{usr|json}}</p>
 			<footer>
 				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
+					<li><a href="single.html" class="button large">Edit</a></li>
 				</ul>
 				<ul class="stats">
 					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
+					<li><a href="#" class="icon solid fa-heart">number of accounts</a></li>
+					<li><a href="#" class="icon solid fa-comment">total balance</a></li>
 				</ul>
 			</footer>
 		</article>
@@ -393,6 +398,17 @@
 			</header><span ng-if="ascreen=='users'">
 			<!-- a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a -->
 			<p>Users</p>
+			<table border="1">
+				<tr><th>id</th><th>user-name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
+				<tr ng-repeat="user in db.data.usr" ng-init="usx=db.ls.a2o('usr',user)">
+					<td>{{usx.id}}</td>
+					<td>{{usx.name}}</td>
+					<td>{{usx.profile|json}}</td>
+					<td>{{usx.state|json}}</td>
+					<td>{{toDate(usx.creaTime)}}</td>
+					<td>{{toDate(usx.lm)}}</td>
+				</tr>
+			</table>
 			<footer>
 				<ul class="actions">
 					<li><a href="single.html" class="button large">Continue Reading</a></li>
@@ -403,6 +419,81 @@
 					<li><a href="#" class="icon solid fa-comment">128</a></li>
 				</ul>
 			</footer></span>
+
+			<span ng-if="ascreen=='banks'">
+			<p>Banks</p>
+			<table border="1">
+				<tr><th>id</th><th>name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
+				<tr ng-repeat="x in db.data.bank" ng-init="usx=db.ls.a2o('bank',x)">
+					<td>{{usx.id}}</td>
+					<td>{{usx.name}}</td>
+					<td>{{usx.profile|json}}</td>
+					<td>{{usx.state|json}}</td>
+					<td>{{toDate(usx.creaTime)}}</td>
+					<td>{{toDate(usx.lm)}}</td>
+				</tr>
+			</table>
+			<footer>
+				<ul class="actions">
+					<li><a href="single.html" class="button large">Continue Reading</a></li>
+				</ul>
+				<ul class="stats">
+					<li><a href="#">General</a></li>
+					<li><a href="#" class="icon solid fa-heart">28</a></li>
+					<li><a href="#" class="icon solid fa-comment">128</a></li>
+				</ul>
+			</footer></span>
+
+			<span ng-if="ascreen=='currencies'">
+			<p>Banks</p>
+			<table border="1">
+				<tr><th>id</th><th>name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
+				<tr ng-repeat="x in db.data.currency" ng-init="usx=db.ls.a2o('currency',x)">
+					<td>{{usx.id}}</td>
+					<td>{{usx.name}}</td>
+					<td>{{usx.profile|json}}</td>
+					<td>{{usx.state|json}}</td>
+					<td>{{toDate(usx.creaTime)}}</td>
+					<td>{{toDate(usx.lm)}}</td>
+				</tr>
+			</table>
+			<footer>
+				<ul class="actions">
+					<li><a href="single.html" class="button large">Continue Reading</a></li>
+				</ul>
+				<ul class="stats">
+					<li><a href="#">General</a></li>
+					<li><a href="#" class="icon solid fa-heart">28</a></li>
+					<li><a href="#" class="icon solid fa-comment">128</a></li>
+				</ul>
+			</footer></span>
+
+			<span ng-if="ascreen=='templates'">
+			<p>Templates</p>
+			<table border="1">
+				<tr><th>id</th><th>parent</th><th>name</th><th>html</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
+				<tr ng-repeat="x in db.data.tmplt" ng-init="usx=db.ls.a2o('tmplt',x)">
+					<td>{{usx.id}}</td>
+					<td>{{usx.parent}}</td>
+					<td>{{usx.name}}</td>
+					<td>{{usx.html}}</td>
+					<td>{{usx.profile|json}}</td>
+					<td>{{usx.state|json}}</td>
+					<td>{{toDate(usx.creaTime)}}</td>
+					<td>{{toDate(usx.lm)}}</td>
+				</tr>
+			</table>
+			<footer>
+				<ul class="actions">
+					<li><a href="single.html" class="button large">Continue Reading</a></li>
+				</ul>
+				<ul class="stats">
+					<li><a href="#">General</a></li>
+					<li><a href="#" class="icon solid fa-heart">28</a></li>
+					<li><a href="#" class="icon solid fa-comment">128</a></li>
+				</ul>
+			</footer></span>
+
 		</article>
 
 		<!-- Pagination -- >
