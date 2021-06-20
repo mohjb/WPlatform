@@ -30,13 +30,13 @@
 				['usr',     ['id','name'                                    ,'profile','state','creaTime','lm']],
 				['bank',    ['id','name'                                    ,'profile','state','creaTime','lm']],
 				['currency',['id','name'                                    ,'profile','state','creaTime','lm']],
-				['rate',    ['id','sell'  ,'buy'    ,'amount'               ,'profile','state','creaTime','lm']],
-				['Acc',     ['id','name'  ,'uid'    ,'bankid','currencyId'  ,'profile','state','creaTime','lm']],
-				['trans',   ['id','srcAcc','dstAcc' ,'amount'               ,'profile','state','creaTime','lm']],
-				['msg',     ['id','uid'   ,'toUsr'  ,'type'  ,'body'        ,'profile','state','creaTime','lm']],
-				['at',      ['id','Tid'   ,'tbl'    ,'type'  ,'body'        ,'profile','state','creaTime','lm']],
-				['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm']],
-				['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm']]]
+				['rate',    ['id','sell'  ,'buy'    ,'amount'               ,'profile','state','creaTime','lm'],{sell:{type:'FK',tbl:'currency'},buy:{type:'FK',tbl:'currency'}}],
+				['Acc',     ['id','name'  ,'uid'    ,'bankid','currencyId'  ,'profile','state','creaTime','lm'],{uid:{type:'FK',tbl:'usr'},bankid:{type:'FK',tbl:'bank'},currencyId:{type:'FK',tbl:'currency'}}],
+				['trans',   ['id','srcAcc','dstAcc' ,'amount'               ,'profile','state','creaTime','lm'],{srcAcc:{type:'FK',tbl:'Acc'},dtsAcc:{type:'FK',tbl:'Acc'}}],
+				['msg',     ['id','uid'   ,'toUsr'  ,'type'  ,'body'        ,'profile','state','creaTime','lm'],{uid:{type:'FK',tbl:'usr'},toUsr:{type:'FK',tbl:'usr'}}],
+				['at',      ['id','Tid'   ,'tbl'    ,'type'  ,'body'        ,'profile','state','creaTime','lm'],{Tid:{type:'GFK',ref:'id'},tbl:{type:'GFK',ref:'tbls'}}],
+				['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm'],{uid:{type:'FK',tbl:'usr'}}],
+				['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm'],{parent:{type:'FK',tbl:'tmplt'}}]]
 			,data:{} //  data.<tblName>.<id>=<obj> ; 'from from $http.get , and from/to localStorage[prefix+"data."+<tbleName>+'.'+<id>]
 			,srvr:{lm:0,save:function srvrSave(tblNm,obj){
 					return $http.post(tblNm+'/'+obj.id,obj,{headers:{sid:app.session.sid}})
@@ -58,7 +58,10 @@
 					})
 				 }
 			 }
-			,ls:{/**get from localStorage*/read:function lsRead(tblNm,id){
+			,ls:{
+			/**initialised from foreign-keys, fk::={<key:tblNm>:{<id>:[<id:child>,,,],,,},,,}*/
+			fk:{}
+			/**get from localStorage*/,read:function lsRead(tblNm,id){
 					let db=$scope.db,dt=db.tbls,ls=localStorage;//dt.forEach(tbl=>db.load(tbl[0]))
 					if(!tblNm){let r=[];for(let e in ls){
 						let a=e.split('.'),v=ls[e],x
@@ -77,7 +80,7 @@
 				}
 				,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
 				,/**set localStorage from param-obj ,or from db.data*/set:function lsSet(tblNm,obj){
-				let db=$scope.db,dt=db.tbls
+				let db=$scope.db//,dt=db.tbls
 				,d=db.data,ls=localStorage
 				,id=obj&&(obj[0]||obj.id);if(!d[tblNm])
 					d[tblNm]={}
@@ -110,7 +113,7 @@
 				}
 				,accTrans:accId=>{
 					let a=[],db=$scope.db,acc=db.data.Acc[accId],ix=db.tbls.trans.f;
-					a=db.data.trans.filter(i=>)
+					a=db.data.trans.filter(i=>0)//TODO: continue implementation
 				}
 			}//ls
 			,get:(tblNm,id)=>({/**
