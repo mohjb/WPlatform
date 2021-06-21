@@ -26,17 +26,17 @@
 		$scope.toDate=s=>new Date(s);
 		$scope.toDateStr=s=>(new Date(s)).toISOString().substr(0,10)
 		$scope.db={prefix:'wplatform.'
-			,tbls:[
-				['usr',     ['id','name'                                    ,'profile','state','creaTime','lm']],
-				['bank',    ['id','name'                                    ,'profile','state','creaTime','lm']],
-				['currency',['id','name'                                    ,'profile','state','creaTime','lm']],
-				['rate',    ['id','sell'  ,'buy'    ,'amount'               ,'profile','state','creaTime','lm'],{sell:{type:'FK',tbl:'currency'},buy:{type:'FK',tbl:'currency'}}],
-				['Acc',     ['id','name'  ,'uid'    ,'bankid','currencyId'  ,'profile','state','creaTime','lm'],{uid:{type:'FK',tbl:'usr'},bankid:{type:'FK',tbl:'bank'},currencyId:{type:'FK',tbl:'currency'}}],
-				['trans',   ['id','srcAcc','dstAcc' ,'amount'               ,'profile','state','creaTime','lm'],{srcAcc:{type:'FK',tbl:'Acc'},dtsAcc:{type:'FK',tbl:'Acc'}}],
-				['msg',     ['id','uid'   ,'toUsr'  ,'type'  ,'body'        ,'profile','state','creaTime','lm'],{uid:{type:'FK',tbl:'usr'},toUsr:{type:'FK',tbl:'usr'}}],
-				['at',      ['id','Tid'   ,'tbl'    ,'type'  ,'body'        ,'profile','state','creaTime','lm'],{Tid:{type:'GFK',ref:'id'},tbl:{type:'GFK',ref:'tbls'}}],
-				['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm'],{uid:{type:'FK',tbl:'usr'}}],
-				['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm'],{parent:{type:'FK',tbl:'tmplt'}}]]
+			,tbls:[// tables definition
+				['usr',     ['id','name','profile','state','creaTime','lm']],
+				['bank',    ['id','name','profile','state','creaTime','lm']],
+				['currency',['id','name','profile','state','creaTime','lm']],
+				['rate',    ['id'		,{colNm:'sell',type:'FK',tbl:'currency'},{colNm:'buy'   ,type:'FK',tbl:'currency'} ,'amount' ,'profile','state','creaTime','lm']],
+				['Acc',     ['id','name',{colNm:'uid' ,type:'FK',tbl:'usr'}		,{colNm:'bankid',type:'FK',tbl:'bank'},{colNm:'currencyId',type:'FK',tbl:'currency'}  ,'profile','state','creaTime','lm']],
+				['trans',   ['id'		,{colNm:'srcAcc',type:'FK',tbl:'Acc'}   ,{colNm:'dstAcc',type:'FK',tbl:'Acc' },'amount'     ,'profile','state','creaTime','lm']],
+				['msg',     ['id'		,{colNm:'uid'   ,type:'FK',tbl:'usr'}   ,{colNm:'toUsr',type:'FK',tbl:'usr'  },'type','body','profile','state','creaTime','lm']],
+				['at',      ['id'		,{colNm:'Tid'   ,type:'GFK',ref:'id'}   ,{colNm:'tbl',type:'GFK',ref:'tbls'  },'type','body','profile','state','creaTime','lm']],
+				['cal',     ['id'		,{colNm:'uid'   ,type:'FK',tbl:'usr'}   ,'name','type','dt','expire'                        ,'profile','state','creaTime','lm']],
+				['tmplt',   ['id'		,{colNm:'parent',type:'FK',tbl:'tmplt'} ,'name' ,'html'                                     ,'profile','state','creaTime','lm']]]
 			,data:{} //  data.<tblName>.<id>=<obj> ; 'from from $http.get , and from/to localStorage[prefix+"data."+<tbleName>+'.'+<id>]
 			,srvr:{lm:0,save:function srvrSave(tblNm,obj){
 					return $http.post(tblNm+'/'+obj.id,obj,{headers:{sid:app.session.sid}})
@@ -59,9 +59,9 @@
 				 }
 			 }
 			,ls:{
-			/**initialised from foreign-keys, fk::={<key:tblNm>:{<id>:[<id:child>,,,],,,},,,}*/
-			fk:{}
-			/**get from localStorage*/,read:function lsRead(tblNm,id){
+				/**initialised from foreign-keys, fk::={<key:tblNm>:{<id>:[<id:child>,,,],,,},,,}*/
+				fk:{}
+				/**get from localStorage*/,read:function lsRead(tblNm,id){
 					let db=$scope.db,dt=db.tbls,ls=localStorage;//dt.forEach(tbl=>db.load(tbl[0]))
 					if(!tblNm){let r=[];for(let e in ls){
 						let a=e.split('.'),v=ls[e],x
@@ -80,19 +80,33 @@
 				}
 				,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
 				,/**set localStorage from param-obj ,or from db.data*/set:function lsSet(tblNm,obj){
-				let db=$scope.db//,dt=db.tbls
-				,d=db.data,ls=localStorage
-				,id=obj&&(obj[0]||obj.id);if(!d[tblNm])
-					d[tblNm]={}
-				if(!tblNm){
-					for(let tn in d){let tbl=d[tn];//,lm=tbl.lm;
-						for (let id in tbl)
-							ls[db.prefix+tn+'.'+id]=JSON.stringify(tbl[id])
+					let db=$scope.db//,dt=db.tbls
+					,d=db.data,ls=localStorage,fk=db.ls.fk
+					,id=obj&&(obj[0]||obj.id);
+					function cacheFK(tbl,a,colIx){
+						if(colIx==undefined)
+							return tbl[1].forEach((c,i)=>tbl[2]&&tbl[2][c]&&cacheFK(tbl,a,i))
+						let colNm=tbl[1][colIx]
+						,cix=tbl[2]&&tbl[2][colNm]
+						if(!cix)return;
+						let t=fk[tbl[0]]
+						,x=t&&t[a[colIx]]
+						if(!t)
+							t=fk[tbl[0]]={};
+						if(!x)
+							x=t[a[colIx]]=[];
 					}
-				}else if(typeof (obj)=='number' && d[tblNm][obj]!=undefined )
-					ls[db.prefix+tblNm+'.'+obj]=JSON.stringify(d[tblNm][obj])
-				else if(id)
-					ls[db.prefix+tblNm+'.'+id]=JSON.stringify(d[tblNm][id]=obj)
+					if(!d[tblNm])
+						d[tblNm]={}
+					if(!tblNm){
+						for(let tn in d){let tbl=d[tn];//,lm=tbl.lm;
+							for (let id in tbl)
+								ls[db.prefix+tn+'.'+id]=JSON.stringify(tbl[id])
+						}
+					}else if(typeof (obj)=='number' && d[tblNm][obj]!=undefined )
+						ls[db.prefix+tblNm+'.'+obj]=JSON.stringify(d[tblNm][obj])
+					else if(id)
+						ls[db.prefix+tblNm+'.'+id]=JSON.stringify(d[tblNm][id]=obj)
 				}//set
 				,a2o:(tblNm,a)=>{
 					let db= $scope.db
@@ -108,7 +122,7 @@
 						a=Object.keys(data).map(id=>db.ls.a2o(tbl,id))
 						return a;}
 					let r={};
-					tbl[1].forEach((c,i)=>r[c]=a[i]) // if(tbl[0]=='usr')else
+					tbl[1].forEach((c,i)=>r[c]=typeof(a[i])=='string'?a[i]:a[i][0]) // if(tbl[0]=='usr')else
 					return r;
 				}
 				,accTrans:accId=>{
