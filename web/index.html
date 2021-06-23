@@ -1,549 +1,219 @@
-<!DOCTYPE HTML><html><head>
-	<title>Money.Download</title>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-	<link rel="stylesheet" href="assets/css/main.css" />
-<script src="angular.min.js"></script><script >
- app=angular.module('wpApp',[]);
+const express = require("express");
 
- app.controller('MainCtrl',
-	function mainCtrlController($scope,$http ) {
-		$scope.usrFlag=app.usr=0
-		$scope.screen=app.screen='login'
-		$scope.starttime=new Date();
-		app.scopes={main:$scope}
-		//var test=(new Date()).toString(),tst=md5.createHash(test)
-		const L= app.Lbl={
-			html:{id:1
-				,login:{id:0}
-				,signup:{id:0}
-				,menu:{id:0}
-				,main:{id:0}
-				,acc:{id:0}}}
-		console.log(
-			'controller:MainCntrl:version=',$scope.starttime//$scope.version='MainCntrl , app='+app
-		);
-		$scope.toDate=s=>new Date(s);
-		$scope.toDateStr=s=>(new Date(s)).toISOString().substr(0,10)
-		$scope.db={prefix:'wplatform.'
-			,tbls:[// tables definition
-				['usr',     ['id','name','profile','state','creaTime','lm']],
-				['bank',    ['id','name','profile','state','creaTime','lm']],
-				['currency',['id','name','profile','state','creaTime','lm']],
-				['rate',    ['id'		,{colNm:'sell',type:'FK',tbl:'currency'},{colNm:'buy'   ,type:'FK',tbl:'currency'} ,'amount' ,'profile','state','creaTime','lm']],
-				['Acc',     ['id','name',{colNm:'uid' ,type:'FK',tbl:'usr'}		,{colNm:'bankid',type:'FK',tbl:'bank'},{colNm:'currencyId',type:'FK',tbl:'currency'}  ,'profile','state','creaTime','lm']],
-				['trans',   ['id'		,{colNm:'srcAcc',type:'FK',tbl:'Acc'}   ,{colNm:'dstAcc',type:'FK',tbl:'Acc' },'amount'     ,'profile','state','creaTime','lm']],
-				['msg',     ['id'		,{colNm:'uid'   ,type:'FK',tbl:'usr'}   ,{colNm:'toUsr',type:'FK',tbl:'usr' ,catType:1 },'type','body','profile','state','creaTime','lm']],
-				['at',      ['id'		,{colNm:'Tid'   ,type:'FK',catType:1} ,'tbl'             ,'type','body'		  ,'profile','state','creaTime','lm']],
-				['cal',     ['id'		,{colNm:'uid'   ,type:'FK',tbl:'usr',catType:1}   ,'name','type','dt','expire','profile','state','creaTime','lm']],
-				['tmplt',   ['id'		,{colNm:'parent',type:'FK',tbl:'tmplt'} ,'name' ,'html'                       ,'profile','state','creaTime','lm']]]
-			,data:{} //  data.<tblName>.<id>=<obj> ; 'from from $http.get , and from/to localStorage[prefix+"data."+<tbleName>+'.'+<id>]
-			,srvr:{lm:0,save:function srvrSave(tblNm,obj){
-					return $http.post(tblNm+'/'+obj.id,obj,{headers:{sid:app.session.sid}})
-						.then(r=>(console.log('db.srvr.save:http.post:resp=',r,tblNm,obj),r))
+const app = express();
+const bodyParser = require('body-parser')//const multer = require('multer') // v1.0.5//const upload = multer() // for parsing multipart/form-data
+
+app.use(bodyParser.json()) // for parsing application/json
+app.use(bodyParser.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
+
+const mariadb = require('mariadb');
+const pool = mariadb.createPool({host: 'localhost', user: 'm',password:'m', database:'test'
+	, connectionLimit: 5, multipleStatements: true ,rowsAsArray:true });
+
+app.Tables=[
+	['usr',     ['id','name'  ,'pw'                             ,'profile','state','creaTime','lm'],'id'],
+	['bank',    ['id','name'                                    ,'profile','state','creaTime','lm']],
+	['currency',['id','name'                                    ,'profile','state','creaTime','lm']],
+	['rate',    ['id','sell'  ,'buy'    ,'amount'               ,'profile','state','creaTime','lm']],
+	['Acc',     ['id','name'  ,'uid'    ,'bankid','currencyId'  ,'profile','state','creaTime','lm'],'uid'],
+	['trans',   ['id','srcAcc','dstAcc' ,'amount'               ,'profile','state','creaTime','lm'],[{col:'srcAcc',fk:{col:'uid',tbl:'acc'}},{col:'dstAcc',fk:{col:'uid',tbl:'acc'}}]],
+	['msg',     ['id','uid'   ,'toUsr'  ,'type'  ,'body'        ,'profile','state','creaTime','lm'],['uid','toUsr']],
+	['at',      ['id','Tid'   ,'tbl'    ,'type'  ,'body'        ,'profile','state','creaTime','lm'],[{col:'tid',fk:{tbl:'tbl'}}]],
+	['cal',     ['id','uid'   ,'name'   ,'type'  ,'dt','expire' ,'profile','state','creaTime','lm'],'uid'],
+	['tmplt',   ['id','parent','name'   ,'html'                 ,'profile','state','creaTime','lm']]]
+
+app.Tables.forEach(e=>app.Tables[e[0]]=e)//console.log('established mariadb pool:',pool);
+
+app.sessions={timeoutPeriod:1000*60*10,f:function(sid){}}
+
+app.use(express.static('web'));
+
+app.post('/doLogin', function (req, res) {
+	console.log('express:app.post:doLogin:0',req,res);
+	let b=req.body ,sns=app.sessions
+		,un=b.un,pw64=b.pw
+		,pw=(new Buffer(pw64, 'base64')).toString('ascii');
+	console.log('express:app.post:doLogin:1',b,un,pw64,pw);
+	if(un && pw ) // ,un=1,pw=1//
+		pool.getConnection()
+		.then(conn =>
+			conn.query("SELECT * from usr where name=? and pw=md5(?)",[un,pw])
+			.then(rows => { // rows: [ {val: 1}, meta: ... ]
+				if(rows){let o=rows[0],ss={sid:(new Date()).getTime(),un:un,usr:{},expire:app.sessions.timeoutPeriod};
+					ss.expire+=ss.sid;
+					//if(o && o.state && !o.state.active) o=0;
+					if(o && o.state && ! o.state.admin )
+						delete o.state;
+					app.Tables.usr[1].forEach((c,i)=>{if(c!='pw')ss.usr[c]=o[i];})//delete o.pw;
+					app.sessions[ss.sid]=ss;
+					console.log('express:app.post:doLogin:2',b,un,o);
+					return res.json(ss);//conn.query("INSERT INTO myTable value (?, ?)", [1, "mariadb"]);
+				}})
+			.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+				conn.release(); // release to pool
+			})
+			.catch(err => {
+				console.log('express:app.post:doLogin:3',err);
+				conn.release(); // release to pool
+			})
+		).catch(err => {
+			console.log('express:app.post:doLogin:4:not connected');//not connected
+		});
+	console.log('express:app.post:doLogin:5');
+})
+
+app.post(':tbl', function (req, res) {
+	const str='express:post:';
+	let p=req.params
+		,lm=p.lm
+		,m=0
+		,h={}
+		,tbl=app.Tables.find(e=>e[0]==p.tbl)
+	if(! tbl)
+		return res.json({error:'invalid operation:'+p.tbl});
+
+	conn.query("replace `'+tbl[0]+'` set ``=? where `id`=?",[p.id])
+		.then(rows =>
+			res.json(rows)
+		)
+		.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+			conn.release();
+		})
+		.catch(err => {//console.log(str,'3',err);
+			conn.release();
+		})
+})
+
+app.get('/lm/:lm', function (req, res) {
+		const str='express:app.get:lm:';
+		let now=new Date().getTime()
+			,sid=req.get('sid')
+			,ss=sid&&app.sessions[sid]
+		if(ss&& ss.expire<now){//TODO: log to DB session time-out
+			if(app&&app.session&& app.session[sid])
+				delete app.session[sid];
+			return res.json({error:'session-timeout'});
+		}
+		if(!ss|| !ss.usr|| !ss.usr.state|| !ss.usr.state.active )
+			return res.json({error:'invalid credintials'});
+		let lm=req.params.lm
+			,uid=ss.usr.id,a={}
+			,admin=ss.usr.state.admin;
+		try{lm=(new Date(+lm)).toISOString()}catch (x){
+			console.warn(x);
+		}
+		ss.expire=now+app.sessions.timeoutPeriod;
+		pool.getConnection().then(conn =>{
+			function f(tbl,retFunc){
+				function trns(tbl){
+					let accs=a[app.Tables.acc[0]]
+					,s='('+accs.join(',')+')'//,tbl=app.Tables.trans
+					return conn.query("SELECT * from `"+tbl[0]+"` where `lm`>? and (srcAcc in "+s+" or dstAcc in "+s+") ",[lm])
 				}
-				,load:function srvrLoad(tblNm,id){
-					let db=$scope.db//,tbls=db.tbls//if(!tblNm){let lm=0;tbls.forEach(tbl=>)}else if(!id){}else Promise.resolve(0);
-					return $http.get('/lm/'+db.srvr.lm,{headers:{sid:app.session.sid}})
-					.then(prm=> {
-						let r = prm.data;
-						console.log('mainScope.db.srvr.load.httpGet.then:', r)
-						for (let tblNm in r){let td=r[tblNm],lmi=td[0]&&td[0].length-1; //if(r[tblNm]&& r[tblNm].forEach)
-							td&&td.forEach&&td.forEach(e =>
-								((db.srvr.lm < e[lmi] ? db.srvr.lm = e[lmi] : 0)
-									, db.ls.set(tblNm, e)
-								)
-							) //else console.log('mainScope.db.srvr.load.kttpGet.then:else',tblNm)
-					}return r;
-					})
-				 }
-			 }
-			,ls:{fk:{}/**initialised from foreign-keys, fk::={<key:tblNm>:{<cat>:{<id>:[<id:child>,,,],,,},,,},,,}*/
-				,read:function lsRead(tblNm,id){/**get from localStorage*/
-					let db=$scope.db,dt=db.tbls,ls=localStorage;//dt.forEach(tbl=>db.load(tbl[0]))
-					if(!tblNm){let r=[];for(let e in ls){
-						let a=e.split('.'),v=ls[e],x
-							,tbl=dt.find(e=>e[0]==a[1])
-							,td=tbl&&db.data[tbl[0]],lmi=tbl&&tbl[1].length-1
-						if(tbl&&!td)
-							td=db.data[tbl[0]]={}
-						if(td)
-							td[a[2]]=x=JSON.parse(v);
-						if(x){
-							if( db.srvr.lm<x[lmi])
-								db.srvr.lm=x[lmi];
-							db.ls.cacheFK(tbl,x)
-							r.push(x)}
-					}return r;
-					}//else if(!id){}else{return}return Promise.resolve(0);
-				}
-				,list:tblNm=>Object.keys($scope.db.data[tblNm]).map(id=>$scope.db.data[tblNm][id])
-				,set:function lsSet(tblNm,obj){/**set localStorage from param-obj ,or from db.data*/
-					let db=$scope.db//,dt=db.tbls
-					,d=db.data,ls=localStorage,fk
-					,id=obj&&(obj[0]||obj.id);
-					if(!d[tblNm])
-						d[tblNm]={}
-					if(!tblNm){
-						for(let tn in d){let tbl=d[tn];//,lm=tbl.lm;
-							for (let id in tbl)
-								ls[db.prefix+tn+'.'+id]=JSON.stringify(tbl[id])
-						}
-					}else if(typeof (obj)=='number' && d[tblNm][obj]!=undefined )
-						ls[db.prefix+tblNm+'.'+obj]=JSON.stringify(obj=(d[tblNm][obj]))
-					else if(id)
-						ls[db.prefix+tblNm+'.'+id]=JSON.stringify(d[tblNm][id]=obj)
-					if(tblNm)
-						db.ls.cacheFK(db.tbls[tblNm],obj)
-				}//set
-				,cacheFK:function cacheFK(tbl,a,colIx){//TODO: have to catch the cases where cacheFK has to remove slots
-					if(colIx==undefined)
-						return tbl[1].forEach((c,i)=>cacheFK(tbl,a,i))
-					let colDef=tbl[1][colIx]
-					if(!colDef)return;
-					function colIndex(cn){for(let i=tbl[1].length-1;i>=0;i--)if(tbl[1][i]==cn||tbl[1][i].colNm==cn)return i;return -1}
-					if(colDef&& colDef.type=='FK'){
-						let ft= colDef.tbl||a[2]
-						,primTbl=db.ls.fk[ ft ],x,z,cti
-						,p=primTbl&& primTbl[ a[colIx] ]
-						if(!primTbl)
-							primTbl=db.ls.fk[ ft ]={};
-						if(!p)
-							p=primTbl[ a[colIx] ]={};
-						x=p[tbl[0]]
-						if(!x)
-							x=p[tbl[0]]={}
-						z=x[cti=(colDef.catType?a[colIndex('type')]:colDef.colNm)]
-						if(!z)
-							z=x[cti]=[];//tfk?colDef.colNm:a[3]
-						if( z.indexOf(a[0])==-1)
-							z.push(a[0]);
-					}}//function cacheFK
-				,a2o:(tblNm,a)=>{
-					let db= $scope.db
-					,b=typeof tblNm=='string'
-					,tbl=b?db.tbls.find(i=>i[0]==tblNm):tblNm;
-					if(!tbl)
-						return a;
-					if(!b && tbl)tblNm=tbl[0];
-					if((typeof a == 'number')||typeof a == 'string')
-						a=db.data[tblNm][a];
-					if(!a){
-						let data=db.data[tblNm]
-						a=Object.keys(data).map(id=>db.ls.a2o(tbl,id))
-						return a;}
-					let r={};
-					tbl[1].forEach((c,i)=>r[c]=a[i].colNm?a[i].colNm:a[i])
-					if(r.fk=db.ls.fk[tblNm])
-						r.fk=r.fk[r.id] // here fk actually means children; fk::={ <key: tblNm> : { <key: fk-colNm>: [ <child-id> ,,, ] } }
-					return r;
-				}
-				,accTrans:accId=>{
-					let a=[],db=$scope.db,acc=db.data.Acc[accId],ix=db.tbls.trans.f;
-					a=db.data.trans.filter(i=>0)//TODO: continue implementation
-				}
-			}//ls
-			,get:(tblNm,id)=>({/**
-				returns an obj
-				{srvr:<promise:returns 0 if not found on server,
-					otherwise returns obj loaded from server>
-				,ls:<promise: return 0 if not found,
-					otherwise returns obj loaded from localStorage>
-				}*/ls:Promise.resolve($scope.db.ls.read(tblNm,id))
-				// TODO: index.html:MainCtrl.$scope.db.get: implement calling a2o for 2 cases with <return promise>.ls
-				,srvr:$scope.db.srvr.load(tblNm,id)
-				// TODO: index.html:MainCtrl.$scope.db.get: implement calling a2o for 2 cases with srvr
+				let w=tbl[2],m=	(!w||admin)?conn.query("SELECT * from `"+tbl[0]+"` where lm>?",[lm])
+				:typeof w=="string"?conn.query("SELECT * from `"+tbl[0]+"` where lm>? and `"+w+"`=?",[lm,uid])
+				:tbl[0]=="at"?0//w.length==1 && w[0].fk?0// tbl attachment
+				:!w[0].fk?conn.query("SELECT * from `"+tbl[0]+"` where lm>? and (`"+w[0]+"`=? or `"+w[1]+"`=?)",[lm,uid,uid])//tbl:msg
+				:tbl[0]=='trans'?trns(tbl)
+				:0 //
+				;
+				if(!m)
+					return retFunc(m)
+				m.then(rows =>
+					retFunc(rows)//
+				)//.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }//conn.release();})
+				.catch(err => {//console.log(str,'3',err);
+					conn.release();
 				})
-			,set:(tblNm,obj)=>({/**function dbSet
-				returns an obj
-				{srvr:<promise:returns 0 if not found on server,
-					otherwise returns obj loaded from server>
-				,ls:<promise: return 0 if not found,
-					otherwise returns obj loaded from localStorage>
-				}*/ls:$scope.db.ls.set(tblNm,obj)
-				,srvr:$scope.db.srvr.save(tblNm,obj)})
-		} // db
-		$scope.db.tbls.forEach(tbl=>$scope.db.tbls[tbl[0]]=tbl)
-	}//function mainCtrlController
- )
-
- app.controller('LoginCtrl',
-	function loginCtrlController($scope,$http ) {
-		const str='controller:LoginCntrl:';
-		app.scopes.login=$scope;
-		$scope.login={un:'',pw:''}//$scope.usrFlag=app.usr=0;
-		$scope.starttime=new Date();//var test=(new Date()).toString(),tst=md5.createHash(test)
-		console.log(str,'version=',$scope.starttime)
-		$scope.tryLogin=function(){
-			let x=$scope.login.pw,st2=str+'tryLogin:';
-			$scope.login.pw=btoa(x);
-			$http.post('/doLogin',JSON.stringify($scope.login))
-				.then(r=>{
-					let p=$scope.$parent
-						,ssn=app.session=r.data
-						,u=ssn.usr
-						,mainScope=app.scopes.main;
-					if(p!= mainScope)
-						console.log(str,'resp:',p,'!=app.scopes.main',app.scopes);
-					console.log(st2,'r`',r)
-					if(u && u.profile)
-					{	mainScope.usr=p.usr=u;
-						if(u.state && u.state.admin )
-							mainScope.admin=p.admin=u.state.admin
-						mainScope.db.ls.read()
-						mainScope.db.srvr.load()
-						mainScope.screen=p.screen='account'
-					}
-				},e=>{
-					console.log(st2,'err`',e)
-					$scope.msg='error:'+e+';'+(new Date());})
-		}
+			}function filtrCols(tbl,rows){
+				const Dates=['dt','expire', 'creaTime','lm' ]
+				let cols=[]
+				Dates.forEach(c=>{
+					let i=tbl[1].indexOf(c)
+					if(i>=0)cols.push(i)})
+				rows.forEach(r=>cols.forEach(ci=>{
+					let v=r[ci];
+					r[ci]=v?(v.getTime?v:new Date(v)).getTime():v;}
+				))
+				if(app.Tables.usr[0]!=tbl[0])return rows;
+				rows.forEach(i=>(i.splice(2,1),i))
+				return rows;
+			} // function filtrCols
+			app.Tables.forEach(//TODO: fix conn/incomplete-Promises race-problem
+				(tbl,i)=>
+				f(tbl,
+					r=>(
+						(a[tbl[0]]=filtrCols(tbl,r)) ,
+						i >=app.Tables.length-1
+						? res.json(a)
+						: 0
+					)
+				)
+			)
+		}).then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+			conn.release();
+		})
 	}
- )
+)
 
- app.controller('AdminCtrl',
-	function adminCtrlController($scope,$http ) {
-		const str='controller:AdminCtrl:';
-		app.scopes.admin=$scope;
-		$scope.starttime=new Date();
-		console.log(str,'version=',$scope.starttime)
-		$scope.list=function(tbl){
-			let x=$scope.login.pw,st2=str+'list:';
-			$scope.login.pw=btoa(x);
-			$http.post('/list/'+tbl+'/'+'tbl.lm',JSON.stringify($scope.login))
-				.then(r=>{
-					let p=$scope.$parent
-						,ssn=app.session=r.data
-						,u=ssn.usr
-						,mainScope=app.scopes.main;
-					if(p!= mainScope)
-						console.log(str,'resp:',p,'!=app.scopes.main',app.scopes);
-					console.log(st2,'r`',r)
-					if(u && u.profile)
-					{	mainScope.usr=p.usr=u;
-						if(u.state && u.state.admin )
-							mainScope.admin=p.admin=u.state.admin
-						mainScope.screen=p.screen='account'
-					}
-				},e=>{
-					console.log(st2,'err`',e)
-					$scope.msg='error:'+e+';'+(new Date());})
+app.get('/:tbl/:id', function (req, res) {
+		const str='express:app.get:tbl:';
+		let now=new Date().getTime()
+			,sid=req.getTime('sid')
+			,ss=sid&&app.sessions[sid]
+		if(ss&& ss.expire<now){//TODO: log to DB session time-out
+			delete app.session[sid];
+			return res.json({error:'session-timeout'});
 		}
+		if(!ss|| !ss.usr|| !ss.usr.state|| !ss.usr.state.active )
+			return res.json({error:'invalid credintials'});
+		let p=req.params
+			,lm=p.lm,a={}
+			,uid=ss.usr.id
+			,admin=ss.usr.state.admin;
+		ss.expire=now+app.sessions.timeoutPeriod;
+		pool.getConnection().then(conn =>{
+			function f(tbl,retFunc){
+				function trns(tbl){
+					let accs=a[app.Tables.acc[0]]
+						,s='('+accs.join(',')+')'//,tbl=app.Tables.trans
+					return conn.query("SELECT * from `"+tbl[0]+"` where `lm`>? and (srcAcc in "+s+" or dstAcc in "+s+") ",[lm])
+				}
+				let w=tbl[2],m=	(!w||admin)?conn.query("SELECT * from `'+tbl[0]+'` where lm>?",[lm])
+					:typeof w=='string'?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and `'+w+'`=?",[lm,uid])
+					:tbl[0]=='at'?0//w.length==1 && w[0].fk?0// tbl attachment
+					:!w[0].fk?conn.query("SELECT * from `'+tbl[0]+'` where lm>? and (`'+w[0+]'`=? or `'+w[1]+'`=?)",[lm,uid,uid])//tbl:msg
+					:tbl[0]=='trans'?trns(tbl)
+					:0 //
+				;
+				if(!m)
+					return retFunc(m)
+				m.then(rows =>
+					retFunc(rows)//
+				)
+					.then(res => { // res: { affectedRows: 1, insertId: 1, warningStatus: 0 }
+						conn.release();
+					})
+					.catch(err => {//console.log(str,'3',err);
+						conn.release();
+					})
+			}
+			app.Tables.forEach(//TODO: fix conn/incomplete-Promises race-problem
+				(tbl,i)=>
+					f(tbl,
+						r=>(
+							(a[tbl[0]]=r) ,
+								i >=app.Tables.length-1
+									? res.json(a)
+									: 0
+						)
+					)
+			)
+		})
 	}
- )
+)
 
- //controller for: profile,accounts, messages
-</script>
-</head><body  ng-app="wpApp" ng-controller="MainCtrl">
-<div ng-controller="LoginCtrl" ng-if="!usr" class="is-preload loginForm" id="wrapperx" >
-	<span ng-if="!login.isSignup"><table><h1>Login</h1>
-		<tr><td>username</td><td><input ng-model="login.un"></td></tr>
-		<tr><td>password</td><td><input ng-model="login.pw" type="password"></td></tr>
-	</table><input type="submit" value="login" ng-click="tryLogin()">
-	{{msg}}<hr><a ng-click="login.isSignup=1">Signup</a> </span>
-
-	<span ng-if="login.isSignup"><table><h1>Signup</h1>
-		<tr><td>username</td><td><input ng-disabled="signupState>2"  ng-model="login.un"></td></tr>
-		<tr><td>password</td><td><input ng-disabled="signupState>2" ng-model="login.pw" type="password"></td></tr>
-		<tr><td>confirm password</td><td><input ng-disabled="signupState>2" ng-model="login.pw" type="password"></td></tr>
-		<tr><td>email</td><td><input ng-disabled="signupState>2" ng-model="login.email" type="email"></td></tr>
-		<tr><td>tel</td><td><input ng-disabled="signupState>2" ng-model="login.tel" type="tel"></td></tr>
-		<tr><td>Full name</td><td><input ng-disabled="signupState>2" ng-model="login.fullname" /></td></tr>
-		<tr><td>CivilId / passport no</td><td><input ng-disabled="signupState>2" ng-model="login.cid" /></td></tr>
-		<tr><td>Country</td><td><input ng-disabled="signupState>2" ng-model="login.country" /></td></tr>
-		<tr><td>Address</td><td><input ng-disabled="signupState>2" ng-model="login.address" /></td></tr>
-		<tr><td>Confirmation code</td><td><input ng-disabled="signupState<2"ng-model="login.ConfirmationCode" /></td></tr>
-	</table><input type="submit" value="signup" ng-click="trySignup()">
-	{{msg}}<hr><a ng-click="login.isSignup=signupState=0">back to login</a> </span>
-</div>
-<!-- Wrapper -->
-<div id="wrapper" ng-if="usr">
-	
-	<!-- Header -->
-	<header id="header">
-		<h1><a href="index.html">Money.Download</a></h1>
-		<nav class="links">
-			<ul>
-				<li><a href="#" ng-click="screen='profile'">Profile</a></li>
-				<li><a href="#" ng-click="screen='account'">Accounts</a></li>
-				<li><a href="#" ng-click="screen='messages'">Messages</a></li>
-				<li><a href="#" ng-click="screen='admin'" >Admin</a></li>
-				<li>Screen={{screen }}</li>
-			</ul>
-		</nav>
-		<nav class="main">
-			<ul>
-				<li class="search">
-					<a class="fa-search" href="#search">Search</a>
-					<form id="search" method="get" action="#">
-						<input type="text" name="query" placeholder="Search" />
-					</form>
-				</li>
-				<li class="menu">
-					<a class="fa-bars" href="#menu">Menu</a>
-				</li>
-			</ul>
-		</nav>
-	</header>
-	
-	<!-- Menu -->
-	<section id="menu" ng-if="usr && usr.state && usr.state.admin">
-		
-		<!-- Search -->
-		<section>
-			<form class="search" method="get" action="#">
-				<input type="text" name="query" placeholder="Search" />
-			</form>
-		</section>
-		
-		<!-- Links -- >
-			<section>
-				<ul class="links">
-					<li>
-						<a href="#">
-							<h3>Profile</h3>
-							<p>Feugiat tempus veroeros dolor</p>
-						</a>
-					</li>
-					<li>
-						<a href="#">
-							<h3>Accounts</h3>
-							<p>Sed vitae justo condimentum</p>
-						</a>
-					</li>
-					<li>
-						<a href="#">
-							<h3>Messages</h3>
-							<p>Porta lectus amet ultricies</p>
-						</a>
-					</li>
-				</ul>
-			</section-->
-		
-		<!-- Actions -->
-		<section ng-if="usr">
-			<ul class="actions stacked">
-				<li><a href="#" class="button large fit">Log Out</a></li>
-			</ul>
-		</section>
-	
-	</section>
-	
-	<!-- Main -->
-	<div id="main">
-		
-		<!-- Accounts , balance, transactions, Admin-section( currencies , banks(banks-list(add,delete), bank-select(edit,accounts,currencies, transByDates ),  )-->
-		<span ng-if="screen=='account'" ng-init="accounts=db.ls.a2o('Acc')">
-		<article ng-repeat="acc in accounts" class="post" ng-init="accUsr=db.ls.a2o('usr',acc.uid)">
-			<header>
-				<div class="title">
-					<h2><a href="single.html">{{acc.name}}</a></h2>
-					<p>{{db.ls.a2o('bank',acc.bankid).name}}</p>
-				</div>
-				<div class="meta">
-					<time class="published" datetime="{{toDateStr(acc.lm)}}">{{toDateStr(acc.creaTime)}}</time>
-					<a href="#" class="author"><span class="name">{{(accUsr.profile&&accUsr.profile.displayName)||accUsr.name}}</span><img src="images/avatar.jpg" alt="" /></a>
-				</div>
-			</header>
-			<a href="single.html" class="image featured"><img src="images/pic01.jpg" alt="" /></a>
-			<p>{{acc | json}}<!-- v2021-06-01- 20:00 18-50 neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.--></p>
-			<footer>
-				<ul class="actions">
-					<li><a href="#" class="button large" ng-click="">Transactions</a></li>
-				</ul>
-				<ul class="stats">
-					<li><a href="#">{{db.ls.a2o('currency',acc.currencyId).name}}</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
-				</ul>
-			</footer>
-		</article></span>
-
-		<!-- Messages, Admin-section -->
-		<article ng-if="screen=='messages'" class="post">
-			<header>
-				<div class="title">
-					<h2><a href="single.html">Messages screen</a></h2>
-					<p>Lorem ipsum dolor amet nullam consequat etiam feugiat</p>
-				</div>
-				<div class="meta">
-					<time class="published" datetime="2015-10-25">October 25, 2015</time>
-					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
-				</div>
-			</header>
-			<a href="single.html" class="image featured"><img src="images/pic02.jpg" alt="" /></a>
-			<p>Mauris neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper.</p>
-			<footer>
-				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
-				</ul>
-				<ul class="stats">
-					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
-				</ul>
-			</footer>
-		</article>
-		
-		<!-- Profile , Admin-section( profile-template-fields )-->
-		<article ng-if="screen=='profile'" class="post">
-			<header>
-				<div class="title">
-					<h2><a href="single.html">Profile screen</a></h2>
-					<p>{{usr.profile.displayName}}</p>
-				</div>
-				<div class="meta">
-					<time class="published" datetime="{{toDate(usr.lm)}}">{{toDateStr(usr.creaTime)}}</time>
-					<a href="#" class="author"><span class="name">{{usr.name}}</span><img src="images/avatar.jpg" alt="" /></a>
-				</div>
-			</header>
-			<a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a>
-			<p>{{usr|json}}</p>
-			<footer>
-				<ul class="actions">
-					<li><a href="single.html" class="button large">Edit</a></li>
-				</ul>
-				<ul class="stats">
-					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">number of accounts</a></li>
-					<li><a href="#" class="icon solid fa-comment">total balance</a></li>
-				</ul>
-			</footer>
-		</article>
-		
-		<!-- Admin-screen( config[profile-template-fields] , users , currency , banks,  )-->
-		<article ng-if="screen=='admin'" class="post">
-			<header>
-				<div class="title">
-					<h2><a href="#">Admin screen</a></h2>
-					<ul><li ng-click="ascreen='users'" class="button large">Users</li>
-						<li ng-click="ascreen='banks'" class="button large">Banks</li>
-						<li ng-click="ascreen='currencies'" class="button large">Currencies</li>
-						<li ng-click="ascreen='templates'" class="button large">Templates</li></ul>
-				</div>
-				<!--div class="meta">
-					<time class="published" datetime="2015-10-22">October 22, 2015</time>
-					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
-				</div-->
-			</header><span ng-if="ascreen=='users'">
-			<!-- a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a -->
-			<p>Users</p>
-			<table border="1">
-				<tr><th>id</th><th>user-name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
-				<tr ng-repeat="user in db.data.usr" ng-init="usx=db.ls.a2o('usr',user)">
-					<td>{{usx.id}}</td>
-					<td>{{usx.name}}</td>
-					<td>{{usx.profile|json}}</td>
-					<td>{{usx.state|json}}</td>
-					<td>{{toDate(usx.creaTime)}}</td>
-					<td>{{toDate(usx.lm)}}</td>
-				</tr>
-			</table>
-			<footer>
-				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
-				</ul>
-				<ul class="stats">
-					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
-				</ul>
-			</footer></span>
-
-			<span ng-if="ascreen=='banks'">
-			<p>Banks</p>
-			<table border="1">
-				<tr><th>id</th><th>name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
-				<tr ng-repeat="x in db.data.bank" ng-init="usx=db.ls.a2o('bank',x)">
-					<td>{{usx.id}}</td>
-					<td>{{usx.name}}</td>
-					<td>{{usx.profile|json}}</td>
-					<td>{{usx.state|json}}</td>
-					<td>{{toDate(usx.creaTime)}}</td>
-					<td>{{toDate(usx.lm)}}</td>
-				</tr>
-			</table>
-			<footer>
-				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
-				</ul>
-				<ul class="stats">
-					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
-				</ul>
-			</footer></span>
-
-			<span ng-if="ascreen=='currencies'">
-			<p>Banks</p>
-			<table border="1">
-				<tr><th>id</th><th>name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
-				<tr ng-repeat="x in db.data.currency" ng-init="usx=db.ls.a2o('currency',x)">
-					<td>{{usx.id}}</td>
-					<td>{{usx.name}}</td>
-					<td>{{usx.profile|json}}</td>
-					<td>{{usx.state|json}}</td>
-					<td>{{toDate(usx.creaTime)}}</td>
-					<td>{{toDate(usx.lm)}}</td>
-				</tr>
-			</table>
-			<footer>
-				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
-				</ul>
-				<ul class="stats">
-					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
-				</ul>
-			</footer></span>
-
-			<span ng-if="ascreen=='templates'">
-			<p>Templates</p>
-			<table border="1">
-				<tr><th>id</th><th>parent</th><th>name</th><th>html</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
-				<tr ng-repeat="x in db.data.tmplt" ng-init="usx=db.ls.a2o('tmplt',x)">
-					<td>{{usx.id}}</td>
-					<td>{{usx.parent}}</td>
-					<td>{{usx.name}}</td>
-					<td>{{usx.html}}</td>
-					<td>{{usx.profile|json}}</td>
-					<td>{{usx.state|json}}</td>
-					<td>{{toDate(usx.creaTime)}}</td>
-					<td>{{toDate(usx.lm)}}</td>
-				</tr>
-			</table>
-			<footer>
-				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
-				</ul>
-				<ul class="stats">
-					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
-				</ul>
-			</footer></span>
-
-		</article>
-
-		<!-- Pagination -- >
-			<ul class="actions pagination">
-				<li><a href="" class="disabled button large previous">Previous Page</a></li>
-				<li><a href="#" class="button large next">Next Page</a></li>
-			</ul -->
-	
-	</div>
-	
-
-
-</div>
-
-<!-- Scripts -->
-<script src="assets/js/jquery.min.js"></script>
-<script src="assets/js/browser.min.js"></script>
-<script src="assets/js/breakpoints.min.js"></script>
-<script src="assets/js/util.js"></script>
-<script src="assets/js/main.js"></script>
-
-</body>
-</html>
+const PORT=80;
+app.listen(PORT, () => {
+	console.log(`Server is listening on port: ${PORT} ,v202106141711`);
+});
