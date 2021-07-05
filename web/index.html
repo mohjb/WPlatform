@@ -142,22 +142,22 @@
 				,accTrans:acc=>{
 					//let a=[],db=$scope.db,acc=db.data.Acc[accId],ix=db.tbls.trans.f;a=db.data.trans.filter(i=>0)//TODO: continue implementation
 					let o={o:acc.fk.trans,a:[]},b=0,A=['srcAcc','dstAcc']
-						,amIx=db.tbls.trans[1].reduce(
-							()=>?:0
-
-					)//TODO: implement here,2021-07-05 11am
+						,amIx=db.tbls.trans[1].reduce((acc,cv,ci)=>'amount'==cv || cv.colNm=='amount'?ci:acc)
+						,lmIX=db.tbls.trans[1].length-1
 					A.forEach(at=>{o[at]=0
 						Object.keys(o.o[at]).forEach(
-							i=>{let tid=o.o[at][i],x=db.data.trans[tid],m=x.amount;
+							i=>{let tid=o.o[at][i]
+									,x=db.data.trans[tid]
+									,m=x[amIx];
 								o[at]+=m;//if(x.srcAcc==acc.id)o.debit+=m;else o.credit+=m
 								o.a.push(x)
 							}
 					)})
 					o.balance=o[A[1]]-o[A[0]];
-					o.a.sort((a,b)=>a.lm<b.lm)
+					o.a.sort((a,b)=>a[lmIX]<b[lmIX])
 					o.b=[]
 					o.a.forEach(x=>{
-						b+=(x.srcAcc==acc.id?-1:1)*x.amount;
+						b+=(x.srcAcc==acc.id?-1:1)*x[amIx];
 						o.b.push(b); })
 					return o;
 				}
@@ -366,24 +366,23 @@
 				</div>
 			</header>
 			<a href="single.html" class="image featured"><img src="images/pic01.jpg" alt="" /></a>
-			<p>{{acc | json}}<!-- v2021-06-01- 20:00 18-50 neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.--></p>
-			<footer>{{trans|json}}
-				<ul class="actions">
-					<li><a href="#" class="button large" ng-click="trans.show=!trans.show">Transactions</a></li>
-					<table ng-show="trans.show" ng-init="bal=0">
-						<tr><th>id</th><th>Date</th><th>from</th><th>to</th><th>amount</th><th>balance</th><th>profile</th>
+			<p><table ng-show="trans.show" ng-init="bal=0">
+						<tr><th>id</th><th>Date</th><th>from</th><th>amount</th><th>balance</th><th>profile</th>
 							<th ng-if="admin">state</th></tr>
 						<tr ng-repeat="ta in trans.a" ng-init="t=db.ls.a2o('trans',ta)">
-							<td title="{{t.id}}">{{$index}}</td>
-							<td>{{t.Date}}</td>
-							<td>{{t.from}}</td>
-							<td>{{t.to}}</td>
+							<td title="{{t.id}}">{{$index +1}}</td>
+							<td>{{toDateStr(t.creaTime)}}</td>
+							<td>{{t.srcAcc}} , {{t.dstAcc}}</td>
 							<td>{{t.amount}}</td>
-							<td>{{t.b[$index]}}</td>
+							<td>{{trans.b[$index]}}</td>
 							<td>{{t.profile|json}}</td>
 							<td ng-if="admin">{{t.state|json}}</td>
 						</tr>
-					</table>
+					</table><!-- v2021-06-01- 20:00 18-50 neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.--></p>
+			<footer>
+				<ul class="actions">
+					<li><a class="button large" ng-click="trans.show=!trans.show">Transactions</a></li>
+
 				</ul>
 				<ul class="stats">
 					<li><a href="#">{{db.ls.a2o('currency',acc.currencyId).name}}</a></li>
