@@ -142,7 +142,10 @@
 				,accTrans:acc=>{
 					//let a=[],db=$scope.db,acc=db.data.Acc[accId],ix=db.tbls.trans.f;a=db.data.trans.filter(i=>0)//TODO: continue implementation
 					let o={o:acc.fk.trans,a:[]},b=0,A=['srcAcc','dstAcc']
-						,amIx=db.tbls.trans[1].indexOf//TODO: implement here,2021-07-05 11am
+						,amIx=db.tbls.trans[1].reduce(
+							()=>?:0
+
+					)//TODO: implement here,2021-07-05 11am
 					A.forEach(at=>{o[at]=0
 						Object.keys(o.o[at]).forEach(
 							i=>{let tid=o.o[at][i],x=db.data.trans[tid],m=x.amount;
