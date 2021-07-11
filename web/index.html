@@ -99,11 +99,7 @@
 						return tbl[1].forEach((c,i)=>cacheFK(tbl,a,i))
 					let colDef=tbl[1][colIx]
 					if(!colDef)
-						return;
-					function colIndex(cn){
-						for(let i=tbl[1].length-1;i>=0;i--)if(tbl[1][i]==cn||tbl[1][i].colNm==cn)
-							return i;
-						return -1}
+						return;//function colIndex(cn){for(let i=tbl[1].length-1;i>=0;i--)if(tbl[1][i]==cn||tbl[1][i].colNm==cn) return i;return -1}
 					if(colDef&& colDef.type=='FK'){
 						let ft= colDef.tbl||a[2]
 						,primTbl=db.ls.fk[ ft ],x,z,cti
@@ -115,7 +111,8 @@
 						x=p[tbl[0]]
 						if(!x)
 							x=p[tbl[0]]={}
-						z=x[cti=(colDef.catType?a[colIndex('type')]:colDef.colNm)]
+						z=x[cti=( colDef.catType?a[ tbl[1].type //colIndex('type')
+								]:colDef.colNm)]
 						if(!z)
 							z=x[cti]=[];//tfk?colDef.colNm:a[3]
 						if( z.indexOf(a[0])==-1)
@@ -140,24 +137,21 @@
 					return r;
 				}
 				,accTrans:acc=>{
-					//let a=[],db=$scope.db,acc=db.data.Acc[accId],ix=db.tbls.trans.f;a=db.data.trans.filter(i=>0)//TODO: continue implementation
-					let o={o:acc.fk.trans,a:[]},b=0,A=['srcAcc','dstAcc']
-						,amIx=db.tbls.trans[1].reduce((acc,cv,ci)=>'amount'==cv || cv.colNm=='amount'?ci:acc)
-						,lmIX=db.tbls.trans[1].length-1
+					let o={o:acc.fk.trans,a:[]},b=0,A=['srcAcc','dstAcc'],tc=db.tbls.trans[1]//,amIx=db.tbls.trans[1].reduce((acc,cv,ci)=>'amount'==cv || cv.colNm=='amount'?ci:acc),lmIX=db.tbls.trans[1].length-1
 					A.forEach(at=>{o[at]=0
 						Object.keys(o.o[at]).forEach(
 							i=>{let tid=o.o[at][i]
 									,x=db.data.trans[tid]
-									,m=x[amIx];
+									,m=x[tc.amount];
 								o[at]+=m;//if(x.srcAcc==acc.id)o.debit+=m;else o.credit+=m
 								o.a.push(x)
 							}
 					)})
 					o.balance=o[A[1]]-o[A[0]];
-					o.a.sort((a,b)=>a[lmIX]<b[lmIX])
+					o.a.sort((a,b)=>a[tc.lm]<b[tc.lm])
 					o.b=[]
 					o.a.forEach(x=>{
-						b+=(x.srcAcc==acc.id?-1:1)*x[amIx];
+						b+=(x[tc.srcAcc]==acc.id?-1:1)*x[tc.amount];
 						o.b.push(b); })
 					return o;
 				}
@@ -182,7 +176,7 @@
 				}*/ls:$scope.db.ls.set(tblNm,obj)
 				,srvr:$scope.db.srvr.save(tblNm,obj)})
 		} // db
-		db.tbls.forEach(tbl=>db.tbls[tbl[0]]=tbl)
+		db.tbls.forEach(tbl=>(db.tbls[tbl[0]]=tbl)[1].forEach((e,i,a)=>a[e.colNm||e]=i))
 	}//function mainCtrlController
  )
 
@@ -367,7 +361,7 @@
 			</header>
 			<a href="single.html" class="image featured"><img src="images/pic01.jpg" alt="" /></a>
 			<p><table ng-show="trans.show" ng-init="bal=0">
-						<tr><th>id</th><th>Date</th><th>from</th><th>amount</th><th>balance</th><th>profile</th>
+					<tr><th>id</th><th>Date</th><th>from</th><th>amount</th><th>balance</th><th>profile</th>
 							<th ng-if="admin">state</th></tr>
 						<tr ng-repeat="ta in trans.a" ng-init="t=db.ls.a2o('trans',ta)">
 							<td title="{{t.id}}">{{$index +1}}</td>
@@ -376,7 +370,7 @@
 							<td>{{t.amount}}</td>
 							<td>{{trans.b[$index]}}</td>
 							<td>{{t.profile|json}}</td>
-							<td ng-if="admin">{{t.state|json}}</td>
+							<td ng-if="admin">{{t|json}}</td>
 						</tr>
 					</table><!-- v2021-06-01- 20:00 18-50 neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.--></p>
 			<footer>
