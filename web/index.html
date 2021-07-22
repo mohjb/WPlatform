@@ -12,7 +12,6 @@
 		$scope.screen=app.screen='login'
 		$scope.starttime=new Date();
 		app.scopes={main:$scope}
-		//var test=(new Date()).toString(),tst=md5.createHash(test)
 		const L= app.Lbl={
 			html:{id:1
 				,login:{id:0}
@@ -120,7 +119,7 @@
 					}}//function cacheFK
 				,a2o:(tblNm,a)=>{
 					let b=typeof tblNm=='string' // db= $scope.db,
-					,tbl=b?db.tbls.find(i=>i[0]==tblNm):tblNm;
+					,tbl=b?db.tbls[tblNm]:tblNm;//db.tbls.find(i=>i[0]==tblNm)
 					if(!tbl)
 						return a;
 					if(!b && tbl)tblNm=tbl[0];
@@ -131,8 +130,8 @@
 						a=Object.keys(data).map(id=>db.ls.a2o(tbl,id))
 						return a;}
 					let r={};
-					tbl[1].forEach((c,i)=>r[c]=a[i]&&a[i].colNm?a[i].colNm:a[i])
-					if(r.fk=db.ls.fk[tblNm])
+					tbl[1].forEach((c,i)=>r[c.colNm||c]=a[i])//a[i]&&a[i].colNm?a[i].colNm:a[i]
+					if( r.fk=db.ls.fk[tblNm])
 						r.fk=r.fk[r.id] // here fk actually means children; fk::={ <key: tblNm> : { <key: fk-colNm>: [ <child-id> ,,, ] } }
 					return r;
 				}
@@ -148,7 +147,7 @@
 							}
 					)})
 					o.balance=o[A[1]]-o[A[0]];
-					o.a.sort((a,b)=>a[tc.lm]<b[tc.lm])
+					o.a.sort((a,b)=>a[tc.lm]<b[tc.lm]||(a[tc.lm]==b[tc.lm]?a[tc.id]<b[tc.id]:0))
 					o.b=[]
 					o.a.forEach(x=>{
 						b+=(x[tc.srcAcc]==acc.id?-1:1)*x[tc.amount];
@@ -175,11 +174,32 @@
 					otherwise returns obj loaded from localStorage>
 				}*/ls:$scope.db.ls.set(tblNm,obj)
 				,srvr:$scope.db.srvr.save(tblNm,obj)})
+			,updt:function (tbl,inp){
+				$http.post(tbl+'/'+inp.id,JSON.stringify({vals:$scope.inp}))
+					.then(r=>{
+							$scope.msg=r+';'+(new Date());
+						},e=>{
+							console.log(st2,'err`',e)
+							$scope.msg='error:'+e+';'+(new Date());}
+					)
+				$scope.inp={}
+			}
 		} // db
 		db.tbls.forEach(tbl=>(db.tbls[tbl[0]]=tbl)[1].forEach((e,i,a)=>a[e.colNm||e]=i))
 	}//function mainCtrlController
  )
-
+ /**TODO: implement the 2 operations: "new" and "edit"
+  * usr
+  * bank
+  * currency
+  * rate
+  * account
+  * trans
+  * msg
+  * at
+  * cal
+  * tmplt
+  * */
  app.controller('LoginCtrl',
 	function loginCtrlController($scope,$http ) {
 		const str='controller:LoginCntrl:';
@@ -220,34 +240,14 @@
 		app.scopes.admin=$scope;
 		$scope.starttime=new Date();
 		console.log(str,'version=',$scope.starttime)
-		$scope.list=function(tbl){
-			let x=$scope.login.pw,st2=str+'list:';
-			$scope.login.pw=btoa(x);
-			$http.post('/list/'+tbl+'/'+'tbl.lm',JSON.stringify($scope.login))
-				.then(r=>{
-					let p=$scope.$parent
-						,ssn=app.session=r.data
-						,u=ssn.usr
-						,mainScope=app.scopes.main;
-					if(p!= mainScope)
-						console.log(str,'resp:',p,'!=app.scopes.main',app.scopes);
-					console.log(st2,'r`',r)
-					if(u && u.profile)
-					{	mainScope.usr=p.usr=u;
-						if(u.state && u.state.admin )
-							mainScope.admin=p.admin=u.state.admin
-						mainScope.screen=p.screen='account'
-					}
-				},e=>{
-					console.log(st2,'err`',e)
-					$scope.msg='error:'+e+';'+(new Date());})
-		}
+		$scope.inp={}
+
 	}
  )
 
  //controller for: profile,accounts, messages
 </script>
-</head><body  ng-app="wpApp" ng-controller="MainCtrl">
+</head><body ng-app="wpApp" ng-controller="MainCtrl">
 <div ng-controller="LoginCtrl" ng-if="!usr" class="is-preload loginForm" id="wrapperx" >
 	<span ng-if="!login.isSignup"><table><h1>Login</h1>
 		<tr><td>username</td><td><input ng-model="login.un"></td></tr>
@@ -361,21 +361,23 @@
 			</header>
 			<a href="single.html" class="image featured"><img src="images/pic01.jpg" alt="" /></a>
 			<p><table ng-show="trans.show" ng-init="bal=0">
-					<tr><th>id</th><th>Date</th><th>from</th><th>amount</th><th>balance</th><th>profile</th>
+					<tr><th>id</th><th>Date</th><th>TransWith Account</th><th>amount</th><th>balance</th><th>profile</th>
 							<th ng-if="admin">state</th></tr>
 						<tr ng-repeat="ta in trans.a" ng-init="t=db.ls.a2o('trans',ta)">
 							<td title="{{t.id}}">{{$index +1}}</td>
 							<td>{{toDateStr(t.creaTime)}}</td>
-							<td>{{t.srcAcc}} , {{t.dstAcc}}</td>
+							<td ng-init="srcAcc=db.ls.a2o('Acc',t.srcAcc);dstAcc=db.ls.a2o('Acc',t.dstAcc);ac2=srcAcc.id==acc.id?dstAcc:srcAcc"><a title="{{ac2}}">{{ac2.name}}</a></td>
 							<td>{{t.amount}}</td>
 							<td>{{trans.b[$index]}}</td>
 							<td>{{t.profile|json}}</td>
-							<td ng-if="admin">{{t|json}}</td>
+							<td ng-if="admin">{{t.state|json}}</td>
 						</tr>
 					</table><!-- v2021-06-01- 20:00 18-50 neque quam, fermentum ut nisl vitae, convallis maximus nisl. Sed mattis nunc id lorem euismod placerat. Vivamus porttitor magna enim, ac accumsan tortor cursus at. Phasellus sed ultricies mi non congue ullam corper. Praesent tincidunt sed tellus ut rutrum. Sed vitae justo condimentum, porta lectus vitae, ultricies congue gravida diam non fringilla.--></p>
 			<footer>
 				<ul class="actions">
 					<li><a class="button large" ng-click="trans.show=!trans.show">Transactions</a></li>
+
+					<li><a class="button large" ng-click="trans.showNew=!trans.showNew">newTrans</a></li>
 
 				</ul>
 				<ul class="stats">
@@ -441,8 +443,8 @@
 		</article>
 		
 		<!-- Admin-screen( config[profile-template-fields] , users , currency , banks,  )-->
-		<article ng-if="screen=='admin'" class="post">
-			<header>
+		<article ng-if="screen=='admin'" class="post" ng-controller="AdminCtrl">
+			<header adminHeader>
 				<div class="title">
 					<h2><a href="#">Admin screen</a></h2>
 					<ul><li ng-click="ascreen='users'" class="button large">Users</li>
@@ -454,30 +456,43 @@
 					<time class="published" datetime="2015-10-22">October 22, 2015</time>
 					<a href="#" class="author"><span class="name">Jane Doe</span><img src="images/avatar.jpg" alt="" /></a>
 				</div-->
-			</header><span ng-if="ascreen=='users'">
-			<!-- a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a -->
-			<p>Users</p>
-			<table border="1">
-				<tr><th>id</th><th>user-name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
-				<tr ng-repeat="user in db.data.usr" ng-init="usx=db.ls.a2o('usr',user)">
-					<td>{{usx.id}}</td>
-					<td>{{usx.name}}</td>
-					<td>{{usx.profile|json}}</td>
-					<td>{{usx.state|json}}</td>
-					<td>{{toDate(usx.creaTime)}}</td>
-					<td>{{toDate(usx.lm)}}</td>
-				</tr>
-			</table>
-			<footer>
+			</header>
+			<span ng-if="ascreen=='users'">
+				<!-- a href="single.html" class="image featured"><img src="images/pic03.jpg" alt="" /></a -->
+				<p>Users</p>
+				<table border="1">
+					<tr><th>id</th><th>user-name</th><th>profile</th><th>state</th><th>creaTime</th><th>LastModified</th></tr>
+					<tr ng-repeat="user in db.data.usr" ng-init="usx=db.ls.a2o('usr',user)">
+						<td>{{usx.id}}</td>
+						<td>{{usx.name}}</td>
+						<td>{{usx.profile|json}}</td>
+						<td>{{usx.state|json}}</td>
+						<td>{{toDate(usx.creaTime)}}</td>
+						<td>{{toDate(usx.lm)}}</td>
+					</tr>
+				</table>
+				<footer>
 				<ul class="actions">
-					<li><a href="single.html" class="button large">Continue Reading</a></li>
+					<li><a class="button large" ng-click="showCreateUsr=!showCreateUsr">Create User</a></li>
 				</ul>
+				<table ng-if="showCreateUsr">
+					<tr><th>id</th>
+						<th>user-name</th>
+						<th>password</th>
+						<th>profile</th>
+						<th>state</th></tr>
+					<tr><td>{{inp.id}}</td>
+						<td><input ng-model="inp.un"/></td>
+						<td><input ng-model="inp.pw"/></td>
+						<td><input ng-model="inp.profile"/></td>
+						<td><input ng-model="inp.state"/></td></tr>
+					<tr><td colspan="5"><input type="button" ng-click="db.updt('usr',inp)"></td></tr>
+				</table>
 				<ul class="stats">
-					<li><a href="#">General</a></li>
-					<li><a href="#" class="icon solid fa-heart">28</a></li>
-					<li><a href="#" class="icon solid fa-comment">128</a></li>
+					<li><a href="#">.</a></li>
 				</ul>
-			</footer></span>
+			</footer>
+			</span>
 
 			<span ng-if="ascreen=='banks'">
 			<p>Banks</p>
